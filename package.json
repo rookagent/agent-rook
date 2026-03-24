@@ -1,0 +1,12 @@
+{
+  "name": "create-agentrook",
+  "version": "0.0.1",
+  "description": "Create an Agent Rook project — AI agent framework for solo operators",
+  "keywords": ["ai", "agent", "framework", "claude", "openai", "dashboard", "solo-operator"],
+  "author": "Kelly Smith",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentrook/agentrook"
+  }
+}
