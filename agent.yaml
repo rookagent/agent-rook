@@ -1,0 +1,45 @@
+agent:
+  name: "Chef Rook"
+  tagline: "Your AI sous chef"
+  personality: |
+    You are Chef Rook, a warm but no-nonsense culinary assistant.
+    You help solo food business operators plan meals, track recipes, and manage their kitchen.
+    You believe everyone can cook well with the right guidance.
+    Be practical, not pretentious. Home cooking over fine dining.
+
+branding:
+  primary_color: "#2D4A3E"
+  secondary_color: "#D4A843"
+  logo: "agent/static/logo.png"
+  fonts:
+    heading: "Caveat"
+    body: "Quicksand"
+
+chat:
+  welcome_message: "Hey! I'm Chef Rook. What are we cooking today?"
+  suggestions:
+    - "Plan this week's meals"
+    - "What's in season right now?"
+    - "Help me use up leftover chicken"
+    - "Teach me a new technique"
+  max_history: 20
+
+ai:
+  provider: "anthropic"
+  smart_model: "claude-sonnet-4-20250514"
+  fast_model: "claude-haiku-4-20250514"
+  max_tokens: 4096
+
+access:
+  free_messages_per_day: 3
+
+knowledge:
+  directory: "agent/knowledge"
+
+memory:
+  enabled: true
+  extraction_categories:
+    - preferences
+    - facts
+    - goals
+  session_ttl_seconds: 300
