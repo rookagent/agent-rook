@@ -56,10 +56,102 @@ Agent Rook was EXTRACTED from Daisy. The two codebases are independent:
 - Daisy's CACFP rules, ELOF domains, state regulations, curriculum frameworks = trade secrets
 
 ## Build Plan (4 Sessions)
-- ✅ Session 1: Backend engine (models, chat engine, auth, knowledge, config)
-- ⬜ Session 2: Frontend (ChatWidget, AgentLayout, auth pages, Stripe checkout)
-- ⬜ Session 3: Chef Rook example agent + custom tool + polished README
-- ⬜ Session 4: Railway deploy, Alembic migration, end-to-end test, push
+
+### ✅ Session 1: Backend Engine (COMPLETE)
+Models, chat engine, auth routes, knowledge system, config. All in `engine/backend/`.
+
+### ⬜ Session 2: Frontend Chat UI
+**Goal:** A working React frontend where users can sign up, chat, and buy credits.
+
+**Source files to reference (READ from daycarespot, WRITE to agentrook):**
+- `daycarespot/frontend/src/components/ChatWidget.js` (1589 lines) → `engine/frontend/src/components/ChatWidget.js`
+  - Keep: streaming SSE, markdown rendering, Web Speech STT (free), message history, print button, expand/collapse
+  - Remove: parent mode vs provider mode branching, provider card rendering, ElevenLabs TTS, Hey Daisy mode
+  - Parameterize: welcome message, suggestion chips, agent name (all from agentConfig.json)
+- `daycarespot/frontend/src/services/chatApi.js` (384 lines) → `engine/frontend/src/services/chatApi.js`
+  - Nearly verbatim. Change token key from 'access_token' to configurable. Agent name in error messages.
+  - Keep: SSE parser, retry logic, heartbeat handling, error classification
+- `daycarespot/frontend/src/pages/DaisyLayout.js` (250 lines) → `engine/frontend/src/components/AgentLayout.js`
+  - Keep: flex layout, nav bar, credit display, footer
+  - Parameterize: brand name, logo, nav items, colors (all from agentConfig.json)
+  - Remove: "View My Listing" link, teacher/shadow checks, Curiosity's Child LLC copyright
+- `daycarespot/frontend/src/context/AuthContext.js` → `engine/frontend/src/context/AuthContext.js`
+  - Simplify: just isLoggedIn, user, credits, updateCredits(), logout()
+  - Remove: isProviderLoggedIn/isParentLoggedIn split, providerUser, staff token handling
+
+**New files to create:**
+- `engine/frontend/src/pages/ChatPage.js` — Full-page chat (ChatWidget centered, not floating widget)
+- `engine/frontend/src/pages/LoginPage.js` — Email + password, agent-branded
+- `engine/frontend/src/pages/SignupPage.js` — Email + password + name, agent-branded
+- `engine/frontend/src/pages/UpgradePage.js` — Credit pack purchase, Stripe checkout redirect
+- `engine/frontend/src/App.js` — Routes: /, /login, /signup, /upgrade, /chat
+- `engine/frontend/src/theme.js` — MUI theme reading colors from agentConfig.json
+- `engine/frontend/src/agentConfig.json` — Generated from agent.yaml at build time (or manual for now)
+- `engine/frontend/package.json` — React 18 + MUI v5 + react-router-dom + axios + react-markdown
+
+**Build-time config injection:**
+- Script reads `agent.yaml`, writes `engine/frontend/src/agentConfig.json`
+- Components import from agentConfig: name, welcome_message, suggestions, colors, fonts
+- No REACT_APP_ env vars needed for branding
+
+**Verify:** `cd engine/frontend && npm start` → app compiles → can sign up → can chat → messages stream
+
+### ⬜ Session 3: Chef Rook Example + Polish
+**Goal:** The example agent works end-to-end with a custom tool. README is polished with screenshots.
+
+**Tasks:**
+1. Create `agent/tools/meal_planner.py` — Example custom tool executor:
+   - `execute_meal_planner(params, user=None)`
+   - Actions: plan (generate weekly meal plan), suggest (suggest meals from ingredients), substitute (dietary substitutions)
+   - Returns formatted text (not DB-backed — pure demo)
+2. Update `agent.yaml` — Wire the meal_planner tool with full schema
+3. Add `agent/tools/__init__.py`
+4. Test the full tool flow: user asks "plan my meals" → Claude calls meal_planner → executor returns plan → Claude presents it
+5. Polish README.md with:
+   - Architecture diagram (text-based)
+   - Screenshots of chat working
+   - "How to add your own knowledge" tutorial section
+   - "How to add your own tools" tutorial section
+   - Comparison table: Agent Rook vs AnythingLLM vs Dify vs OpenClaw
+   - Contributing guidelines (basic)
+6. Add `.gitignore` (Python + Node standard ignores)
+
+**Verify:** Clone fresh → `pip install` → `flask run` → sign up → "plan this week's meals" → tool executes → response with meal plan
+
+### ⬜ Session 4: Deploy + Launch Prep
+**Goal:** Someone can deploy Agent Rook to Railway in under 10 minutes.
+
+**Tasks:**
+1. Create `railway.json` — Pre-configured for backend service
+2. Fix Dockerfile COPY paths for Railway's build context
+3. Create initial Alembic migration: `flask db init` + `flask db migrate` (generic schema: users, agent_memories, subscriptions, promo_codes)
+4. Test full deployment flow:
+   - Fresh clone → set env vars → Railway deploy → health check passes
+   - Sign up → chat → buy credits (Stripe test mode) → knowledge lookup → memory persists
+5. Create `CONTRIBUTING.md` — How to contribute (fork, branch, PR)
+6. Create GitHub issues for v2 features:
+   - Hub-and-spoke dashboard
+   - Sub-accounts / team members
+   - OpenAI / Gemini provider support
+   - Document upload + RAG
+   - Celery async tasks
+   - ElevenLabs voice
+7. Set up GitHub repo metadata:
+   - Description: "Your Strategic AI Scaffold — open-source AI agent framework"
+   - Topics: ai, agent, framework, claude, llm, open-source, python, flask, react
+   - Website: agentrook.ai
+8. Optional: Record a 2-minute Loom/screen recording showing the full flow
+
+**Verify:** Fresh `git clone` on a clean machine → Railway deploy → end-to-end works
+
+## Launch Strategy (Post-Session 4)
+1. Reddit: r/SideProject, r/selfhosted, r/ClaudeAI, r/SaaS, r/opensource
+   - Title: "I built an AI assistant for my daycare. Then I open-sourced the engine."
+   - Story-driven, not feature-driven. Kelly's journey is the hook.
+2. Hacker News: "Show HN: Agent Rook — open-source AI agent framework for solo operators"
+3. X/Twitter: Tag @AnthropicAI, share the story
+4. Product Hunt: Schedule for a Tuesday/Wednesday launch
+5. Dev.to / Hashnode: Technical blog post about the extraction process
 
 ## Important Notes
 - Kelly is the sole developer (non-technical, builds with Claude Code)
