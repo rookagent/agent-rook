@@ -96,25 +96,57 @@ Models, chat engine, auth routes, knowledge system, config. All in `engine/backe
 
 **Verify:** `cd engine/frontend && npm start` → app compiles → can sign up → can chat → messages stream
 
-### ⬜ Session 3: Chef Rook Example + Polish
-**Goal:** The example agent works end-to-end with a custom tool. README is polished with screenshots.
+### ⬜ Session 3: Two Example Agents + Polish
+**Goal:** Ship TWO example agents that prove the "swap in 10 seconds" concept. README is polished.
+
+**The "aha moment":** Same framework, completely different agent by copying one folder. This sells the platform.
+
+**Folder structure:**
+```
+agent/                          ← Active agent (user copies an example here)
+├── agent.yaml
+├── knowledge/
+└── tools/
+agent/examples/                 ← Shipped examples
+├── lens-cap/                   ← Photographer agent (Session 2 built this)
+│   ├── agent.yaml
+│   ├── knowledge/
+│   │   ├── composition.md
+│   │   ├── lighting.md
+│   │   └── wedding_workflow.md
+│   └── tools/
+│       └── shot_list.py
+└── bookkeeper/                 ← Bookkeeper agent (NEW in Session 3)
+    ├── agent.yaml
+    ├── knowledge/
+    │   ├── tax_deductions.md   (IRS Schedule C categories, home office, vehicle, meals)
+    │   ├── quarterly_filing.md (estimated taxes, deadlines, penalties)
+    │   └── bookkeeping_101.md  (cash vs accrual, chart of accounts, reconciliation)
+    └── tools/
+        └── expense_tracker.py  (log expense, categorize, generate report)
+```
 
 **Tasks:**
-1. Create `agent/tools/meal_planner.py` — Example custom tool executor:
-   - `execute_meal_planner(params, user=None)`
-   - Actions: plan (generate weekly meal plan), suggest (suggest meals from ingredients), substitute (dietary substitutions)
-   - Returns formatted text (not DB-backed — pure demo)
-2. Update `agent.yaml` — Wire the meal_planner tool with full schema
-3. Add `agent/tools/__init__.py`
-4. Test the full tool flow: user asks "plan my meals" → Claude calls meal_planner → executor returns plan → Claude presents it
-5. Polish README.md with:
+1. Move existing Lens Cap files into `agent/examples/lens-cap/`
+2. Create bookkeeper example:
+   - `agent.yaml` — "Ledger" personality, warm but precise, knows IRS rules
+   - 3 knowledge files (tax deductions, quarterly filing, bookkeeping basics)
+   - `expense_tracker.py` — example tool (log, categorize, summarize actions)
+3. README "Switch agents in 10 seconds" tutorial:
+   ```bash
+   # Want a photographer assistant?
+   cp -r agent/examples/lens-cap/* agent/
+   # Want a bookkeeper instead?
+   cp -r agent/examples/bookkeeper/* agent/
+   ```
+4. Polish README.md with:
    - Architecture diagram (text-based)
-   - Screenshots of chat working
-   - "How to add your own knowledge" tutorial section
-   - "How to add your own tools" tutorial section
+   - Screenshots of BOTH agents (same framework, different personality/knowledge)
+   - "How to add your own knowledge" tutorial
+   - "How to add your own tools" tutorial
    - Comparison table: Agent Rook vs AnythingLLM vs Dify vs OpenClaw
-   - Contributing guidelines (basic)
-6. Add `.gitignore` (Python + Node standard ignores)
+5. Add `.gitignore` (Python + Node standard ignores)
+6. Test: switch from Lens Cap → Bookkeeper → restart → verify different knowledge loads
 
 **Verify:** Clone fresh → `pip install` → `flask run` → sign up → "plan this week's meals" → tool executes → response with meal plan
 
