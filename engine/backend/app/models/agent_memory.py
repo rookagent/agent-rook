@@ -71,9 +71,13 @@ class AgentMemory(db.Model):
     # Active/archived
     is_active = db.Column(db.Boolean, default=True, index=True)
 
-    # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Bi-temporal tracking (Zep-inspired)
+    # recorded_at = when we LEARNED this fact (system time)
+    # occurred_at = when this fact actually HAPPENED (user-stated time)
+    # Example: "I started HighScope in January" → recorded_at=March 25, occurred_at=January 1
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # = recorded_at
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    occurred_at = db.Column(db.DateTime, nullable=True)  # when the fact actually happened (if stated)
 
     # Relationships
     user = db.relationship('User', backref=db.backref('agent_memories', lazy='dynamic'))
@@ -92,6 +96,7 @@ class AgentMemory(db.Model):
             'org_id': self.org_id,
             'surprise_score': self.surprise_score,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'occurred_at': self.occurred_at.isoformat() if self.occurred_at else None,
         }
         if self.structured_data:
             try:

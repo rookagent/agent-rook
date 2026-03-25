@@ -56,6 +56,11 @@ class Config:
     KNOWLEDGE_DIR = AGENT_CONFIG.get('knowledge', {}).get('directory', 'agent/knowledge')
     MEMORY_ENABLED = AGENT_CONFIG.get('memory', {}).get('enabled', True)
     MEMORY_CATEGORIES = AGENT_CONFIG.get('memory', {}).get('extraction_categories', ['preferences', 'facts', 'goals'])
+    MEMORY_CAP = AGENT_CONFIG.get('memory', {}).get('cap', 50)  # max active memories per user (Vigil may need 200+)
+    MEMORY_PROMPT_LIMIT = AGENT_CONFIG.get('memory', {}).get('prompt_limit', 40)  # max injected into system prompt
+    MEMORY_DUAL_ORG_LIMIT = AGENT_CONFIG.get('memory', {}).get('dual_org_limit', 15)
+    MEMORY_DUAL_PERSONAL_LIMIT = AGENT_CONFIG.get('memory', {}).get('dual_personal_limit', 10)
+    MEMORY_BITEMPORAL = AGENT_CONFIG.get('memory', {}).get('bitemporal', True)  # extract occurred_at from facts
     CHAT_WELCOME = AGENT_CONFIG.get('chat', {}).get('welcome_message', f"Hey! I'm {AGENT_NAME}. How can I help?")
     CHAT_SUGGESTIONS = AGENT_CONFIG.get('chat', {}).get('suggestions', [])
     CHAT_MAX_HISTORY = AGENT_CONFIG.get('chat', {}).get('max_history', 20)
