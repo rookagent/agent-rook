@@ -13,6 +13,9 @@ import json
 import logging
 from datetime import datetime
 
+import pytz
+from sqlalchemy import text as sa_text
+
 from app.utils.ai_client import ai_complete_json, MODEL_FAST
 from app.models.agent_memory import AgentMemory
 from app.extensions import db
@@ -213,31 +216,281 @@ def extract_memories_regex(conversation_messages):
     return memories[:10]  # Cap at 10 regex extractions per session
 
 
+# ── 4-Way Memory Classification Pipeline ──
+
+def _find_similar_memories(content, user_id, threshold=0.3, limit=3):
+    """
+    Find the top N most similar existing memories using pg_trgm.
+    Returns list of AgentMemory objects, or empty list if pg_trgm unavailable.
+    """
+    try:
+        results = (
+            AgentMemory.query
+            .filter(
+                AgentMemory.user_id == user_id,
+                AgentMemory.is_active == True,
+                sa_text("similarity(content, :new_content) > :threshold"),
+            )
+            .params(new_content=content, threshold=threshold)
+            .order_by(sa_text("similarity(content, :new_content) DESC"))
+            .params(new_content=content)
+            .limit(limit)
+            .all()
+        )
+        return results
+    except Exception as e:
+        logger.debug(f"pg_trgm similarity query failed (expected if not installed): {e}")
+        db.session.rollback()
+        return []
+
+
+def classify_memory_action(new_content, similar_memories, ai_complete_func=None):
+    """
+    Classify whether a new memory should be ADDed, UPDATE an existing one,
+    DELETE an existing one, or be skipped (NOOP).
+
+    Uses Haiku (MODEL_FAST) to make the decision when similar memories exist.
+
+    Args:
+        new_content: The new memory candidate text
+        similar_memories: List of AgentMemory objects (top 3 most similar)
+        ai_complete_func: Optional override for the LLM call (for testing).
+                          Defaults to ai_complete_json with MODEL_FAST.
+
+    Returns:
+        dict with {action: 'ADD'|'UPDATE'|'DELETE'|'NOOP', target_id: int|None, reason: str}
+    """
+    if not similar_memories:
+        return {'action': 'ADD', 'target_id': None, 'reason': 'No similar memories found'}
+
+    # Build the existing memories block for the prompt
+    existing_lines = []
+    valid_ids = set()
+    for mem in similar_memories:
+        existing_lines.append(
+            f"ID {mem.id}: {mem.content} (confidence: {mem.confidence})"
+        )
+        valid_ids.add(mem.id)
+
+    existing_block = "\n".join(existing_lines)
+
+    prompt = f"""You are a memory manager. A new fact has been learned:
+"{new_content}"
+
+Here are the most similar existing memories:
+{existing_block}
+
+Classify what to do:
+- ADD: This is genuinely new information, save it
+- UPDATE: This corrects or replaces an existing memory — specify which ID
+- DELETE: This contradicts and invalidates an existing memory — specify which ID
+- NOOP: This is already known, skip it
+
+Return ONLY JSON: {{"action": "ADD|UPDATE|DELETE|NOOP", "target_id": null|<id>, "reason": "<brief reason>"}}"""
+
+    call_func = ai_complete_func or ai_complete_json
+
+    try:
+        raw = call_func(
+            prompt=prompt,
+            model=MODEL_FAST,
+            max_tokens=150,
+            context="Memory classification",
+        )
+
+        # Parse the result — ai_complete_json returns a string
+        if isinstance(raw, str):
+            result = json.loads(raw)
+        elif isinstance(raw, dict):
+            result = raw
+        else:
+            raise ValueError(f"Unexpected response type: {type(raw)}")
+
+        action = str(result.get('action', 'ADD')).upper()
+        if action not in ('ADD', 'UPDATE', 'DELETE', 'NOOP'):
+            action = 'ADD'
+
+        target_id = result.get('target_id')
+
+        # Validate target_id — must reference one of the similar memories
+        if action in ('UPDATE', 'DELETE') and target_id not in valid_ids:
+            logger.warning(
+                f"Classification returned target_id={target_id} not in similar set "
+                f"{valid_ids}, falling back to ADD"
+            )
+            action = 'ADD'
+            target_id = None
+
+        return {
+            'action': action,
+            'target_id': target_id,
+            'reason': str(result.get('reason', ''))[:200],
+        }
+
+    except Exception as e:
+        logger.warning(f"Memory classification failed, defaulting to ADD: {e}")
+        return {'action': 'ADD', 'target_id': None, 'reason': f'Classification error: {e}'}
+
+
+def _execute_memory_action(action_result, new_mem_data, user_id):
+    """
+    Execute the classified action on a single memory candidate.
+
+    Returns:
+        str: What happened — 'added', 'updated', 'deleted', 'skipped', 'reinforced'
+    """
+    action = action_result['action']
+    target_id = action_result.get('target_id')
+    content = new_mem_data.get('content', '').strip()
+
+    if action == 'ADD':
+        memory = AgentMemory(
+            user_id=user_id,
+            memory_type=new_mem_data.get('type', 'fact'),
+            content=content,
+            category=new_mem_data.get('category'),
+            confidence=new_mem_data.get('confidence', 0.8),
+        )
+        db.session.add(memory)
+        return 'added'
+
+    elif action == 'UPDATE' and target_id:
+        target = AgentMemory.query.get(target_id)
+        if target and target.user_id == user_id and target.is_active:
+            target.content = content
+            target.reinforce()
+            return 'updated'
+        else:
+            # Target not found or doesn't belong to user — fall back to ADD
+            memory = AgentMemory(
+                user_id=user_id,
+                memory_type=new_mem_data.get('type', 'fact'),
+                content=content,
+                category=new_mem_data.get('category'),
+                confidence=new_mem_data.get('confidence', 0.8),
+            )
+            db.session.add(memory)
+            return 'added'
+
+    elif action == 'DELETE' and target_id:
+        target = AgentMemory.query.get(target_id)
+        if target and target.user_id == user_id and target.is_active:
+            target.is_active = False
+            target.confidence = 0.0
+            return 'deleted'
+        return 'skipped'
+
+    elif action == 'NOOP':
+        # Reinforce the most similar existing memory
+        if target_id:
+            target = AgentMemory.query.get(target_id)
+            if target and target.user_id == user_id and target.is_active:
+                target.reinforce()
+                return 'reinforced'
+        return 'skipped'
+
+    return 'skipped'
+
+
 # ── Save Extracted Memories ──
 
 def save_extracted_memories(user_id, memories):
     """
-    Save a list of extracted memories, handling dedup via the model's
-    save_memories_from_session() which uses pg_trgm fuzzy matching.
+    Save a list of extracted memories using the 4-way classification pipeline.
+
+    For each memory candidate:
+    1. Query top 3 similar memories (pg_trgm, threshold 0.3)
+    2. If no similar memories → ADD directly (no LLM call, saves money)
+    3. If similar memories exist → classify via Haiku (ADD/UPDATE/DELETE/NOOP)
+    4. Execute the classified action
+
+    Falls back to simple dedup (save_memories_from_session) if classification
+    errors out — the pipeline is an enhancement, not a gate.
 
     Returns:
-        int: Number of memories saved (new or reinforced)
+        int: Number of memories added, updated, or reinforced
     """
     if not memories:
         return 0
 
+    actions_taken = {'added': 0, 'updated': 0, 'deleted': 0, 'reinforced': 0, 'skipped': 0}
+
     try:
-        saved = AgentMemory.save_memories_from_session(
-            memories_list=memories,
-            user_id=user_id,
+        for mem_data in memories:
+            content = mem_data.get('content', '').strip()
+            if not content:
+                continue
+
+            # Step 1: Find similar existing memories
+            similar = _find_similar_memories(content, user_id, threshold=0.3, limit=3)
+
+            if not similar:
+                # Step 2: No similar memories — ADD directly, skip LLM call
+                memory = AgentMemory(
+                    user_id=user_id,
+                    memory_type=mem_data.get('type', 'fact'),
+                    content=content,
+                    category=mem_data.get('category'),
+                    confidence=mem_data.get('confidence', 0.8),
+                )
+                db.session.add(memory)
+                actions_taken['added'] += 1
+            else:
+                # Step 3: Similar memories found — classify via Haiku
+                try:
+                    action_result = classify_memory_action(content, similar)
+                    result = _execute_memory_action(action_result, mem_data, user_id)
+                    actions_taken[result] += 1
+                    logger.debug(
+                        f"Memory classification: {action_result['action']} "
+                        f"(reason: {action_result.get('reason', 'n/a')})"
+                    )
+                except Exception as e:
+                    # Classification failed — fall back to old dedup behavior
+                    # similarity > 0.6 = reinforce, else save new
+                    logger.warning(f"Classification pipeline error, using fallback dedup: {e}")
+                    high_sim = _find_similar_memories(content, user_id, threshold=0.6, limit=1)
+                    if high_sim:
+                        high_sim[0].reinforce()
+                        actions_taken['reinforced'] += 1
+                    else:
+                        memory = AgentMemory(
+                            user_id=user_id,
+                            memory_type=mem_data.get('type', 'fact'),
+                            content=content,
+                            category=mem_data.get('category'),
+                            confidence=mem_data.get('confidence', 0.8),
+                        )
+                        db.session.add(memory)
+                        actions_taken['added'] += 1
+
+        db.session.commit()
+
+        total = actions_taken['added'] + actions_taken['updated'] + actions_taken['reinforced']
+        logger.info(
+            f"Memory pipeline for user {user_id}: "
+            f"{actions_taken['added']} added, {actions_taken['updated']} updated, "
+            f"{actions_taken['deleted']} deleted, {actions_taken['reinforced']} reinforced, "
+            f"{actions_taken['skipped']} skipped"
         )
-        count = len(saved) if saved else 0
-        logger.info(f"Saved {count} memories for user {user_id}")
-        return count
+        return total
+
     except Exception as e:
-        logger.error(f"Failed to save memories for user {user_id}: {e}")
+        logger.error(f"Memory pipeline failed for user {user_id}, falling back to bulk save: {e}")
         db.session.rollback()
-        return 0
+        # Full fallback — use the original simple dedup method
+        try:
+            saved = AgentMemory.save_memories_from_session(
+                memories_list=memories,
+                user_id=user_id,
+            )
+            count = len(saved) if saved else 0
+            logger.info(f"Fallback save: {count} memories for user {user_id}")
+            return count
+        except Exception as e2:
+            logger.error(f"Fallback save also failed for user {user_id}: {e2}")
+            db.session.rollback()
+            return 0
 
 
 # ── Full Extraction Pipeline ──

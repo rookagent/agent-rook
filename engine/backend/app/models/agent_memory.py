@@ -65,6 +65,9 @@ class AgentMemory(db.Model):
     # Source tracking
     source_session = db.Column(db.String(100))
 
+    # Surprise scoring — how unlike existing memories this fact was when saved
+    surprise_score = db.Column(db.Float, nullable=True, default=None)
+
     # Active/archived
     is_active = db.Column(db.Boolean, default=True, index=True)
 
@@ -87,6 +90,7 @@ class AgentMemory(db.Model):
             'confidence': self.confidence,
             'times_reinforced': self.times_reinforced,
             'org_id': self.org_id,
+            'surprise_score': self.surprise_score,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
         if self.structured_data:
@@ -490,6 +494,74 @@ class AgentMemory(db.Model):
         )
         return count
 
+    @classmethod
+    def _calculate_surprise(cls, content, user_id, org_id=None):
+        """
+        Calculate how surprising/novel a piece of content is relative to
+        everything the agent already knows about this user.
+
+        Queries the 10 most similar active memories using pg_trgm similarity().
+        Surprise = 1.0 - highest_similarity among them.
+
+        Returns float 0.0-1.0 (1.0 = completely novel, 0.0 = exact duplicate).
+        Falls back to 0.5 if pg_trgm is unavailable.
+        """
+        from sqlalchemy import text as sa_text
+
+        try:
+            # Build scope filter
+            scope_clause = "is_active = true"
+            params = {'new_content': content}
+
+            if org_id:
+                scope_clause += " AND org_id = :org_id"
+                params['org_id'] = org_id
+            if user_id:
+                scope_clause += " AND user_id = :user_id"
+                params['user_id'] = user_id
+
+            rows = db.session.execute(
+                sa_text(
+                    f"SELECT similarity(content, :new_content) AS sim "
+                    f"FROM agent_memories "
+                    f"WHERE {scope_clause} "
+                    f"ORDER BY sim DESC LIMIT 10"
+                ),
+                params,
+            ).fetchall()
+
+            if not rows:
+                # No existing memories — everything is surprising
+                return 1.0
+
+            highest_similarity = rows[0][0]  # first row, sim column
+            return round(1.0 - highest_similarity, 4)
+
+        except Exception:
+            # pg_trgm not installed or query failed — default to neutral
+            db.session.rollback()
+            logger.debug("pg_trgm similarity() unavailable, defaulting surprise to 0.5")
+            return 0.5
+
+    @classmethod
+    def get_surprising_memories(cls, user_id, org_id=None, limit=5):
+        """
+        Return the top N memories by surprise_score DESC.
+        Useful for analytics: "what's the most unexpected thing I learned?"
+        """
+        filters = [cls.is_active == True, cls.surprise_score.isnot(None)]
+        if user_id:
+            filters.append(cls.user_id == user_id)
+        if org_id:
+            filters.append(cls.org_id == org_id)
+
+        return (
+            cls.query.filter(*filters)
+            .order_by(cls.surprise_score.desc())
+            .limit(limit)
+            .all()
+        )
+
     @staticmethod
     def save_memories_from_session(user_id=None, memories_list=None, org_id=None):
         """
@@ -546,13 +618,28 @@ class AgentMemory(db.Model):
                 existing.reinforce()
                 saved.append(existing)
             else:
+                # Calculate surprise score — how novel is this vs existing memories?
+                surprise = AgentMemory._calculate_surprise(content, user_id, org_id)
+
+                # Adjust confidence based on surprise:
+                # Very surprising facts are high-signal, definitely worth keeping.
+                # Mundane/related facts get lower initial confidence.
+                base_confidence = mem_data.get('confidence', 0.8)
+                if surprise > 0.7:
+                    adjusted_confidence = 0.95  # very surprising — definitely save
+                elif surprise >= 0.4:
+                    adjusted_confidence = 0.85  # somewhat new
+                else:
+                    adjusted_confidence = 0.7   # related to known things
+
                 memory = AgentMemory(
                     user_id=user_id,
                     org_id=org_id,
                     memory_type=mem_data.get('type', 'fact'),
                     content=content,
                     category=mem_data.get('category'),
-                    confidence=mem_data.get('confidence', 0.8),
+                    confidence=adjusted_confidence,
+                    surprise_score=surprise,
                 )
                 db.session.add(memory)
                 saved.append(memory)
