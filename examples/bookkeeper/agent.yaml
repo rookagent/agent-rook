@@ -1,0 +1,162 @@
+agent:
+  name: "Ledger"
+  tagline: "Your AI bookkeeper"
+  personality: |
+    You are Ledger, a bookkeeping and tax assistant built for sole proprietors,
+    freelancers, and small business owners. You think like an experienced bookkeeper
+    who's seen every kind of small business — from food trucks to SaaS startups.
+
+    You know IRS rules cold but explain them in plain English. You never give
+    legal advice, but you DO give actionable bookkeeping guidance that would
+    make a CPA nod in agreement.
+
+    Be precise with numbers. Always cite the relevant IRS form or publication
+    when referencing tax rules. When something is a gray area, say so — and
+    explain both sides so the user can make an informed decision with their
+    tax professional.
+
+    Warm but precise. You care about their business succeeding AND staying
+    out of trouble with the IRS. Occasional dry humor about taxes welcome.
+
+branding:
+  primary_color: "#1B2A4A"
+  secondary_color: "#4A7C59"
+  background: "#F7F8FA"
+  logo: "agent/static/logo.png"
+  fonts:
+    heading: "Caveat"
+    body: "Quicksand"
+
+chat:
+  welcome_message: "Hey — Ledger here. Let's get your books in order. What are we working on?"
+  suggestions:
+    - "Log an expense"
+    - "What can I deduct?"
+    - "Help me with quarterly taxes"
+    - "Categorize my recent purchases"
+  max_history: 20
+
+ai:
+  provider: "anthropic"
+  smart_model: "claude-sonnet-4-20250514"
+  fast_model: "claude-haiku-4-20250514"
+  max_tokens: 4096
+
+access:
+  free_messages_per_day: 3
+
+dashboard:
+  greeting: true
+  cards:
+    - title: "Expenses"
+      description: "Log and categorize business costs"
+      icon: "Receipt"
+      color: "#4A7C59"
+      route: "/expenses"
+    - title: "Calendar"
+      description: "Tax deadlines and appointments"
+      icon: "CalendarMonth"
+      color: "#5B7B9D"
+      route: "/schedule"
+    - title: "Tasks"
+      description: "Filing deadlines and to-dos"
+      icon: "CheckCircle"
+      color: "#7D6B5D"
+      route: "/tasks"
+    - title: "Clients"
+      description: "Track clients and 1099 recipients"
+      icon: "People"
+      color: "#5D7D6B"
+      route: "/clients"
+    - title: "Checklists"
+      description: "Tax prep, year-end, quarterly filing"
+      icon: "Inventory"
+      color: "#6B5D7D"
+      route: "/checklists"
+    - title: "Notes"
+      description: "Receipt notes, meeting notes, tax memos"
+      icon: "Description"
+      color: "#7D5D5D"
+      route: "/notes"
+    - title: "Reports"
+      description: "Expense summaries and profit/loss"
+      icon: "TrendingUp"
+      color: "#5D6B7D"
+      route: "/expenses"
+    - title: "Ask Ledger"
+      description: "Tax questions, deductions, filing help"
+      icon: "Chat"
+      color: "#1B2A4A"
+      route: "/chat"
+
+spokes:
+  clients:
+    enabled: true
+    label: "Clients"
+    label_singular: "Client"
+    icon: "People"
+    color: "#5D7D6B"
+  schedule:
+    enabled: true
+    label: "Calendar"
+    label_singular: "Event"
+    icon: "CalendarMonth"
+    color: "#5B7B9D"
+  tasks:
+    enabled: true
+    label: "Tasks"
+    label_singular: "Task"
+    icon: "CheckCircle"
+    color: "#7D6B5D"
+  expenses:
+    enabled: true
+    label: "Expenses"
+    label_singular: "Expense"
+    icon: "Receipt"
+    color: "#4A7C59"
+  notes:
+    enabled: true
+    label: "Notes"
+    label_singular: "Note"
+    icon: "Description"
+    color: "#7D5D5D"
+
+tools:
+  - name: "knowledge_base"
+    knowledge_tool: true
+  - name: "manage_data"
+    description: "Create, list, update, or delete data — expenses, clients, tasks, calendar events, notes, and checklists. Use this whenever the user wants to log, track, save, edit, or view their data. Use 'list' first to find IDs before updating/deleting."
+    module: "agent.tools.spoke_tools"
+    function: "execute_spoke_tool"
+    schema:
+      type: "object"
+      properties:
+        resource:
+          type: "string"
+          enum: ["expenses", "clients", "tasks", "schedule", "notes", "checklists"]
+        action:
+          type: "string"
+          enum: ["create", "list", "update", "delete"]
+        data:
+          type: "object"
+          description: "Fields for create/update. For expenses: {description, amount, category, date, vendor, is_deductible}. For clients: {name, email, phone, notes, tags}. For tasks: {title, description, priority, due_date, status}."
+        id:
+          type: "integer"
+          description: "Record ID for update/delete"
+        filters:
+          type: "object"
+          description: "Filters for list: {category, status, q, upcoming, limit}"
+      required: ["resource", "action"]
+
+knowledge:
+  directory: "agent/knowledge"
+
+memory:
+  enabled: true
+  extraction_categories:
+    - preferences
+    - facts
+    - goals
+    - business_info
+    - tax_situation
+  session_ttl_seconds: 300

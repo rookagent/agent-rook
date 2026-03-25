@@ -9,6 +9,7 @@ def register_blueprints(app):
     from .checklists import checklists_bp
     from .session_plans import session_plans_bp
     from .dashboard import dashboard_bp
+    from .outreach import outreach_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(chat_bp, url_prefix='/api/chat')
@@ -20,6 +21,7 @@ def register_blueprints(app):
     app.register_blueprint(checklists_bp, url_prefix='/api/checklists')
     app.register_blueprint(session_plans_bp, url_prefix='/api/session-plans')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
 
     # Stripe (optional — only if keys configured)
     if app.config.get('STRIPE_SECRET_KEY'):

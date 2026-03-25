@@ -92,7 +92,10 @@ def register_tools(app):
 def _execute_tool(tool_name, tool_params, user):
     """
     Execute a single tool call. Routes to the appropriate executor.
+    Uses diagnostics for structured error reporting.
     """
+    from .diagnostics import diagnose_tool_error, format_error_for_log
+
     # Built-in: knowledge base
     if tool_name == 'knowledge_base':
         return _execute_knowledge(tool_params)
@@ -102,10 +105,11 @@ def _execute_tool(tool_name, tool_params, user):
         try:
             return _tool_registry[tool_name](tool_params, user=user)
         except Exception as e:
-            logger.error(f"Tool '{tool_name}' failed: {e}")
-            return f"Tool error: {str(e)}"
+            logger.error(f"Tool '{tool_name}' failed: {format_error_for_log(e, context=tool_name)}")
+            diagnosis = diagnose_tool_error(tool_name, tool_params, e)
+            return f"[TOOL ERROR] {diagnosis.summary} — {diagnosis.detail} Suggestion: {diagnosis.suggestion}"
 
-    return f"Unknown tool: {tool_name}"
+    return f"Unknown tool: {tool_name}. Available tools: {', '.join(list(_tool_registry.keys()) + ['knowledge_base'])}"
 
 
 def _execute_knowledge(params):
@@ -178,10 +182,12 @@ def chat(user, message, conversation_history=None):
             context="Agent chat",
         )
     except Exception as e:
-        logger.error(f"AI call failed: {e}")
+        from .diagnostics import diagnose_api_error, format_error_for_log
+        logger.error(f"AI call failed: {format_error_for_log(e, 'initial_call')}")
+        diagnosis = diagnose_api_error(e)
         return {
-            'message': f"I'm having trouble right now. Please try again in a moment.",
-            'data': None,
+            'message': diagnosis.to_user_message(),
+            'data': {'diagnosis': diagnosis.to_dict()},
             'credits': access.get('credits', 0),
             'remaining': access.get('remaining', 0),
             'access_type': access['access_type'],

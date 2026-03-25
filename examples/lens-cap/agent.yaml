@@ -144,12 +144,6 @@ tools:
           description: "Filters for list action: {category, status, q (search), upcoming (bool), limit (int)}"
       required: ["resource", "action"]
 
-outreach:
-  morning_briefing: true
-  weekly_roundup: true
-  briefing_hour: 7
-  roundup_day: "monday"
-
 knowledge:
   directory: "agent/knowledge"
 
