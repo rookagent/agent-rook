@@ -13,6 +13,7 @@ def register_blueprints(app):
     from .outreach import outreach_bp
     from .export import export_bp
     from .memories import memories_bp
+    from .memory_analytics import memory_analytics_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(chat_bp, url_prefix='/api/chat')
@@ -28,6 +29,7 @@ def register_blueprints(app):
     app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
     app.register_blueprint(export_bp, url_prefix='/api/export')
     app.register_blueprint(memories_bp, url_prefix='/api/memories')
+    app.register_blueprint(memory_analytics_bp, url_prefix='/api/memories/analytics')
 
     # Stripe (optional — only if keys configured)
     if app.config.get('STRIPE_SECRET_KEY'):

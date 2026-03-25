@@ -42,6 +42,13 @@ def register_tools(app):
 
     tools_config = AGENT_CONFIG.get('tools', [])
 
+    # ── Built-in memory tools (always available) ──
+    from .memory_tools import MEMORY_TOOL_DEFINITIONS, execute_memory_tool
+    for mem_tool in MEMORY_TOOL_DEFINITIONS:
+        _tool_definitions.append(mem_tool)
+        _tool_registry[mem_tool['name']] = lambda params, user, _name=mem_tool['name']: execute_memory_tool(_name, params, user)
+    logger.info(f"Registered {len(MEMORY_TOOL_DEFINITIONS)} built-in memory tools")
+
     for tool_conf in tools_config:
         name = tool_conf['name']
         is_knowledge = tool_conf.get('knowledge_tool', False)

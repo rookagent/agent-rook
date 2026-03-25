@@ -29,7 +29,9 @@ import {
   PrintOutlined,
   Refresh,
 } from '@mui/icons-material';
-import { streamChatMessage } from '../services/chatApi';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
+import { streamChatMessage, getToken } from '../services/chatApi';
 import { useAuth } from '../context/AuthContext';
 import config from '../agentConfig.json';
 import ReactMarkdown from 'react-markdown';
@@ -142,6 +144,7 @@ function ChatWidget({ initialPrompt }) {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   const [isListening, setIsListening] = useState(false);
+  const [snack, setSnack] = useState({ open: false, message: '', severity: 'info' });
   const initialPromptSent = useRef(false);
 
   const messagesEndRef = useRef(null);
@@ -333,6 +336,65 @@ function ChatWidget({ initialPrompt }) {
   }, [input, loading, messages, updateCredits, consecutiveErrors]);
 
   handleSendRef.current = handleSend;
+
+  // --- Session-end memory extraction ---
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const extractingRef = useRef(false);
+
+  const extractMemories = useCallback(() => {
+    const msgs = messagesRef.current;
+    if (extractingRef.current || msgs.length < 4) return;
+    extractingRef.current = true;
+
+    const token = getToken();
+    const payload = JSON.stringify({
+      messages: msgs
+        .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.isError))
+        .map(m => ({ role: m.role, content: m.content })),
+    });
+
+    // Use sendBeacon on unload (fire-and-forget), regular fetch otherwise
+    if (document.visibilityState === 'hidden' || !document.hasFocus()) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon?.(`${config.api_url}/memories/extract?token=${token}`, blob);
+    } else {
+      fetch(`${config.api_url}/memories/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: payload,
+        keepalive: true,
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.saved > 0) {
+            setSnack({ open: true, message: 'Memories saved', severity: 'info' });
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // Inactivity timer — extract after 2 minutes of no new messages
+  const inactivityTimer = useRef(null);
+  useEffect(() => {
+    if (messages.length >= 4) {
+      clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = setTimeout(extractMemories, 2 * 60 * 1000);
+    }
+    return () => clearTimeout(inactivityTimer.current);
+  }, [messages, extractMemories]);
+
+  // Extract on page unload / navigation away
+  useEffect(() => {
+    const handleBeforeUnload = () => extractMemories();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Component unmount (navigation away) — extract if enough messages
+      extractMemories();
+    };
+  }, [extractMemories]);
 
   // Auto-send initial prompt from dashboard card click
   useEffect(() => {
@@ -612,6 +674,19 @@ function ChatWidget({ initialPrompt }) {
           {loading ? <CircularProgress size={20} color="inherit" /> : <Send sx={{ fontSize: 20 }} />}
         </IconButton>
       </Box>
+
+      {/* Memory extraction snackbar */}
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={2500}
+        onClose={() => setSnack(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snack.severity} variant="standard" sx={{ fontSize: '0.8rem' }}
+          onClose={() => setSnack(s => ({ ...s, open: false }))}>
+          {snack.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

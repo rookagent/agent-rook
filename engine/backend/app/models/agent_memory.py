@@ -18,6 +18,7 @@ Schedule memories use a single merged JSON record per user (not fragments).
 """
 import json
 import logging
+import pytz
 from datetime import datetime
 from app.extensions import db
 
@@ -29,11 +30,18 @@ class AgentMemory(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Owner — always a user
+    # Owner — user and/or organization
     user_id = db.Column(
         db.Integer,
         db.ForeignKey('users.id', ondelete='CASCADE'),
-        nullable=False,
+        nullable=True,  # NULL when memory is org-scoped only
+        index=True,
+    )
+
+    # Organization scope — plain integer, no FK until Org model exists
+    org_id = db.Column(
+        db.Integer,
+        nullable=True,
         index=True,
     )
 
@@ -78,6 +86,7 @@ class AgentMemory(db.Model):
             'category': self.category,
             'confidence': self.confidence,
             'times_reinforced': self.times_reinforced,
+            'org_id': self.org_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
         if self.structured_data:
@@ -335,18 +344,135 @@ class AgentMemory(db.Model):
         return result
 
     @classmethod
-    def purge_all_memories(cls, user_id=None):
+    def get_dual_memories_for_prompt(cls, org_id=None, user_id=None):
         """
-        Soft-delete ALL memories for a user.
+        Dual-scope memory retrieval for organization + personal context.
+
+        Returns a formatted string with two labeled sections:
+        - ORGANIZATION CONTEXT: org-scoped memories (org_id set, user_id NULL or matching)
+        - YOUR PERSONAL PROFILE: personal memories (user_id set, org_id NULL)
+
+        Caches with composite key rook:mem:dual:{org_id}:{user_id} (1hr TTL).
+        Total cap: 25 memories (15 org + 10 personal).
+        """
+        if not org_id and not user_id:
+            return ""
+
+        # Check dual-scope cache first
+        cached = _get_cached_dual_block(org_id=org_id, user_id=user_id)
+        if cached is not None:
+            return cached
+
+        lines = []
+        org_memories = []
+        personal_memories = []
+
+        # 1. Organization-scoped memories (up to 15)
+        if org_id:
+            from sqlalchemy import or_
+            org_memories = (
+                cls.query.filter(
+                    cls.org_id == org_id,
+                    cls.is_active == True,
+                    or_(cls.user_id.is_(None), cls.user_id == user_id),
+                )
+                .order_by(cls.confidence.desc(), cls.last_reinforced.desc())
+                .limit(15)
+                .all()
+            )
+
+        # 2. Personal memories — user-scoped only, no org (up to 10)
+        if user_id:
+            personal_memories = (
+                cls.query.filter(
+                    cls.user_id == user_id,
+                    cls.org_id.is_(None),
+                    cls.is_active == True,
+                )
+                .order_by(cls.confidence.desc(), cls.last_reinforced.desc())
+                .limit(10)
+                .all()
+            )
+
+        if not org_memories and not personal_memories:
+            return ""
+
+        # Format organization section
+        if org_memories:
+            lines.append("ORGANIZATION CONTEXT (shared across your team):")
+            grouped = {}
+            for m in org_memories:
+                grouped.setdefault(m.memory_type, []).append(m)
+
+            type_labels = {
+                'schedule': 'Schedule',
+                'fact': 'Facts',
+                'preference': 'Preferences',
+                'goal': 'Goals',
+                'interaction': 'Recent Context',
+            }
+            for mtype, label in type_labels.items():
+                if mtype in grouped:
+                    for m in grouped[mtype]:
+                        lines.append(f"  - {label}: {m.content}")
+
+        # Format personal section
+        if personal_memories:
+            if lines:
+                lines.append("")
+            lines.append("YOUR PERSONAL PROFILE (follows you everywhere):")
+            grouped = {}
+            for m in personal_memories:
+                grouped.setdefault(m.memory_type, []).append(m)
+
+            type_labels = {
+                'preference': 'Preferences',
+                'fact': 'Facts',
+                'goal': 'Goals',
+                'schedule': 'Schedule',
+                'interaction': 'Recent Context',
+            }
+            for mtype, label in type_labels.items():
+                if mtype in grouped:
+                    for m in grouped[mtype]:
+                        lines.append(f"  - {label}: {m.content}")
+
+        lines.append(
+            "\nUse these memories naturally — org context applies to team interactions, "
+            "personal context is unique to this user."
+        )
+
+        result = "\n".join(lines)
+        _set_cached_dual_block(result, org_id=org_id, user_id=user_id)
+        return result
+
+    @classmethod
+    def purge_all_memories(cls, user_id=None, org_id=None):
+        """
+        Soft-delete ALL memories for a user and/or organization.
         Sets is_active=False (not hard delete) for audit trail.
         Invalidates memory cache after purge.
 
+        If org_id is provided, purges org-scoped memories for that org.
+        If user_id is provided, purges personal memories for that user.
+        If both provided, purges both scopes.
+
         Returns count of memories deactivated.
         """
-        if not user_id:
+        if not user_id and not org_id:
             return 0
 
-        memories = cls.query.filter_by(user_id=user_id, is_active=True).all()
+        from sqlalchemy import or_
+
+        conditions = []
+        if user_id:
+            conditions.append(cls.user_id == user_id)
+        if org_id:
+            conditions.append(cls.org_id == org_id)
+
+        memories = (
+            cls.query.filter(or_(*conditions), cls.is_active == True).all()
+        )
         count = len(memories)
 
         for m in memories:
@@ -356,21 +482,27 @@ class AgentMemory(db.Model):
         if memories:
             db.session.commit()
 
-        _invalidate_cache(user_id=user_id)
+        _invalidate_cache(user_id=user_id, org_id=org_id)
 
-        logger.info(f"Memory purge complete: {count} memories deactivated (user={user_id})")
+        logger.info(
+            f"Memory purge complete: {count} memories deactivated "
+            f"(user={user_id}, org={org_id})"
+        )
         return count
 
     @staticmethod
-    def save_memories_from_session(user_id=None, memories_list=None):
+    def save_memories_from_session(user_id=None, memories_list=None, org_id=None):
         """
         Save new memories extracted from a chat session.
 
         memories_list: [{"type": "preference", "content": "Prefers concise answers", "category": "workflow"}, ...]
 
+        If org_id is provided, memories are saved with org scope (org_id set).
+        If only user_id, memories are personal scope (org_id NULL).
+
         Uses pg_trgm fuzzy dedup (similarity > 0.6) with exact-match fallback.
         """
-        if not memories_list or not user_id:
+        if not memories_list or (not user_id and not org_id):
             return []
 
         saved = []
@@ -382,13 +514,18 @@ class AgentMemory(db.Model):
             # Fuzzy dedup: check for similar existing memories (pg_trgm similarity > 0.6)
             from sqlalchemy import text as sa_text
             existing = None
+
+            # Build dedup filters based on scope
+            dedup_filters = [AgentMemory.is_active == True]
+            if org_id:
+                dedup_filters.append(AgentMemory.org_id == org_id)
+            if user_id:
+                dedup_filters.append(AgentMemory.user_id == user_id)
+
             try:
                 existing = (
                     AgentMemory.query
-                    .filter(
-                        AgentMemory.user_id == user_id,
-                        AgentMemory.is_active == True,
-                    )
+                    .filter(*dedup_filters)
                     .filter(sa_text("similarity(content, :new_content) > 0.6"))
                     .params(new_content=content)
                     .order_by(sa_text("similarity(content, :new_content) DESC"))
@@ -398,11 +535,12 @@ class AgentMemory(db.Model):
             except Exception:
                 # Fallback: exact match if pg_trgm not installed
                 db.session.rollback()
-                existing = AgentMemory.query.filter_by(
-                    user_id=user_id,
-                    content=content,
-                    is_active=True,
-                ).first()
+                fallback_filters = {'content': content, 'is_active': True}
+                if org_id:
+                    fallback_filters['org_id'] = org_id
+                if user_id:
+                    fallback_filters['user_id'] = user_id
+                existing = AgentMemory.query.filter_by(**fallback_filters).first()
 
             if existing:
                 existing.reinforce()
@@ -410,6 +548,7 @@ class AgentMemory(db.Model):
             else:
                 memory = AgentMemory(
                     user_id=user_id,
+                    org_id=org_id,
                     memory_type=mem_data.get('type', 'fact'),
                     content=content,
                     category=mem_data.get('category'),
@@ -420,7 +559,7 @@ class AgentMemory(db.Model):
 
         db.session.commit()
 
-        _invalidate_cache(user_id=user_id)
+        _invalidate_cache(user_id=user_id, org_id=org_id)
 
         return saved
 
@@ -458,6 +597,10 @@ def _cache_key(user_id):
     return f"rook:mem:user:{user_id}"
 
 
+def _dual_cache_key(org_id, user_id):
+    return f"rook:mem:dual:{org_id}:{user_id}"
+
+
 def _get_cached_block(user_id=None):
     """Return cached memory block string, or None if not cached."""
     if not user_id:
@@ -467,6 +610,19 @@ def _get_cached_block(user_id=None):
         return None
     try:
         return r.get(_cache_key(user_id))
+    except Exception:
+        return None
+
+
+def _get_cached_dual_block(org_id=None, user_id=None):
+    """Return cached dual-scope memory block, or None if not cached."""
+    if not org_id and not user_id:
+        return None
+    r = _get_redis()
+    if not r:
+        return None
+    try:
+        return r.get(_dual_cache_key(org_id, user_id))
     except Exception:
         return None
 
@@ -484,14 +640,53 @@ def _set_cached_block(block, user_id=None):
         pass
 
 
-def _invalidate_cache(user_id=None):
-    """Delete cached memory block for a user."""
-    if not user_id:
+def _set_cached_dual_block(block, org_id=None, user_id=None):
+    """Cache a formatted dual-scope memory block string."""
+    if not block or (not org_id and not user_id):
         return
     r = _get_redis()
     if not r:
         return
     try:
-        r.delete(_cache_key(user_id))
+        r.setex(_dual_cache_key(org_id, user_id), _CACHE_TTL, block)
     except Exception:
         pass
+
+
+def _invalidate_cache(user_id=None, org_id=None):
+    """
+    Delete cached memory blocks.
+    Invalidates both user-scoped and dual-scoped cache keys.
+    When org_id changes, uses pattern scan to clear all dual keys for that org.
+    """
+    r = _get_redis()
+    if not r:
+        return
+
+    keys_to_delete = []
+
+    if user_id:
+        keys_to_delete.append(_cache_key(user_id))
+
+    # Invalidate dual-scope keys
+    if org_id and user_id:
+        keys_to_delete.append(_dual_cache_key(org_id, user_id))
+
+    # When org memories change, any user's dual cache with this org is stale
+    if org_id:
+        try:
+            pattern = f"rook:mem:dual:{org_id}:*"
+            cursor = 0
+            while True:
+                cursor, found = r.scan(cursor, match=pattern, count=100)
+                keys_to_delete.extend(found)
+                if cursor == 0:
+                    break
+        except Exception:
+            pass
+
+    if keys_to_delete:
+        try:
+            r.delete(*keys_to_delete)
+        except Exception:
+            pass

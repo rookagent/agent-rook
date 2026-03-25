@@ -16,10 +16,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Paper, Typography, IconButton, Chip, Snackbar, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
-  LinearProgress, Tooltip,
+  LinearProgress, Tooltip, CircularProgress,
 } from '@mui/material';
 import {
-  Delete, Edit, DeleteForever, Download, Psychology,
+  Delete, Edit, DeleteForever, Download, Psychology, Autorenew,
 } from '@mui/icons-material';
 import SpokePageShell from '../components/spokes/SpokePageShell';
 import { getToken } from '../services/chatApi';
@@ -68,6 +68,8 @@ export default function MemoriesPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
+  const [analytics, setAnalytics] = useState(null);
+  const [consolidating, setConsolidating] = useState(false);
 
   const fetchMemories = useCallback(async () => {
     try {
@@ -79,7 +81,28 @@ export default function MemoriesPage() {
     }
   }, []);
 
-  useEffect(() => { fetchMemories(); }, [fetchMemories]);
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_URL}/memories/analytics`);
+      const data = await res.json();
+      setAnalytics(data);
+    } catch (_) {}
+  }, []);
+
+  const handleConsolidate = async () => {
+    setConsolidating(true);
+    try {
+      await authFetch(`${API_URL}/memories/consolidate`, { method: 'POST' });
+      await Promise.all([fetchMemories(), fetchAnalytics()]);
+      setSnack({ open: true, message: 'Memories consolidated', severity: 'success' });
+    } catch (err) {
+      setSnack({ open: true, message: err.message, severity: 'error' });
+    } finally {
+      setConsolidating(false);
+    }
+  };
+
+  useEffect(() => { fetchMemories(); fetchAnalytics(); }, [fetchMemories, fetchAnalytics]);
 
   // Filter by search
   const filtered = memories.filter(m =>
@@ -180,18 +203,69 @@ export default function MemoriesPage() {
         </Button>
       </Box>
 
-      {/* Stats */}
-      <Paper elevation={0} sx={{ p: 2, mb: 3, borderRadius: 3, border: '1px solid #eee', bgcolor: '#FAFAF8' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Psychology sx={{ color: '#7E57C2', fontSize: 24 }} />
-          <Typography sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-            {memories.length} {memories.length === 1 ? 'memory' : 'memories'} stored
-          </Typography>
+      {/* Analytics */}
+      <Paper elevation={0} sx={{ p: 2.5, mb: 3, borderRadius: 3, border: '1px solid #eee', bgcolor: '#FAFAF8' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Psychology sx={{ color: '#7E57C2', fontSize: 24 }} />
+            <Typography sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+              {analytics?.total_memories ?? memories.length} {(analytics?.total_memories ?? memories.length) === 1 ? 'memory' : 'memories'}
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            startIcon={consolidating ? <CircularProgress size={14} /> : <Autorenew />}
+            onClick={handleConsolidate}
+            disabled={consolidating}
+            sx={{ textTransform: 'none', fontSize: '0.8rem', color: '#7E57C2' }}
+          >
+            Consolidate
+          </Button>
         </Box>
-        <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mt: 0.5 }}>
-          These are things your agent remembers about you across conversations.
-          You can edit or delete any of them.
-        </Typography>
+
+        {/* Stat row */}
+        {analytics && (
+          <Box sx={{ display: 'flex', gap: 3, mb: 1.5 }}>
+            <Box>
+              <Typography sx={{ fontSize: '1.2rem', fontWeight: 700, color: '#7E57C2', lineHeight: 1 }}>
+                {Math.round((analytics.average_confidence || 0) * 100)}%
+              </Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>avg confidence</Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: '1.2rem', fontWeight: 700, color: '#7E57C2', lineHeight: 1 }}>
+                {analytics.memories_this_week ?? 0}
+              </Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>this week</Typography>
+            </Box>
+          </Box>
+        )}
+
+        {/* Type distribution chips */}
+        {analytics?.type_distribution && Object.keys(analytics.type_distribution).length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            {Object.entries(analytics.type_distribution).map(([type, count]) => (
+              <Chip
+                key={type}
+                label={`${TYPE_LABELS[type] || type} ${count}`}
+                size="small"
+                sx={{
+                  bgcolor: `${TYPE_COLORS[type] || '#666'}18`,
+                  color: TYPE_COLORS[type] || '#666',
+                  fontWeight: 600,
+                  fontSize: '0.72rem',
+                  height: 24,
+                }}
+              />
+            ))}
+          </Box>
+        )}
+
+        {!analytics && (
+          <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+            Things your agent remembers about you across conversations.
+          </Typography>
+        )}
       </Paper>
 
       {/* Memory groups */}
