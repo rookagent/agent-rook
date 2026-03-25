@@ -1,18 +1,10 @@
 /**
- * Agent Rook — App router.
- *
- * Routes:
- *   /          → Dashboard (logged in) or Login (logged out)
- *   /login     → Login page
- *   /signup    → Signup page
- *   /dashboard → Hub dashboard with feature cards (protected)
- *   /chat      → Chat page (protected)
- *   /upgrade   → Credit purchase (protected)
+ * Agent Rook — App router with dark mode support.
  */
-import React from 'react';
+import React, { useState, useMemo, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
-import theme from './theme';
+import { lightTheme, darkTheme } from './theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AgentLayout from './components/AgentLayout';
 import LoginPage from './pages/LoginPage';
@@ -27,6 +19,10 @@ import ExpensesPage from './pages/ExpensesPage';
 import ChecklistsPage from './pages/ChecklistsPage';
 import SessionPlansPage from './pages/SessionPlansPage';
 import NotesPage from './pages/NotesPage';
+
+// Theme context
+const ThemeModeContext = createContext({ mode: 'light', toggle: () => {} });
+export function useThemeMode() { return useContext(ThemeModeContext); }
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuth();
@@ -62,16 +58,28 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const [mode, setMode] = useState(() => localStorage.getItem('rook_theme') || 'light');
+
+  const toggle = () => {
+    const next = mode === 'light' ? 'dark' : 'light';
+    setMode(next);
+    localStorage.setItem('rook_theme', next);
+  };
+
+  const theme = useMemo(() => mode === 'dark' ? darkTheme : lightTheme, [mode]);
+
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <BrowserRouter>
-        <AuthProvider>
-          <AgentLayout>
-            <AppRoutes />
-          </AgentLayout>
-        </AuthProvider>
-      </BrowserRouter>
-    </ThemeProvider>
+    <ThemeModeContext.Provider value={{ mode, toggle }}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <BrowserRouter>
+          <AuthProvider>
+            <AgentLayout>
+              <AppRoutes />
+            </AgentLayout>
+          </AuthProvider>
+        </BrowserRouter>
+      </ThemeProvider>
+    </ThemeModeContext.Provider>
   );
 }

@@ -1,6 +1,7 @@
 def register_blueprints(app):
     from .auth import auth_bp
     from .chat import chat_bp
+    from .chat_stream import chat_stream_bp
     from .clients import clients_bp
     from .schedule import schedule_bp
     from .tasks import tasks_bp
@@ -10,9 +11,11 @@ def register_blueprints(app):
     from .session_plans import session_plans_bp
     from .dashboard import dashboard_bp
     from .outreach import outreach_bp
+    from .export import export_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(chat_bp, url_prefix='/api/chat')
+    app.register_blueprint(chat_stream_bp, url_prefix='/api/chat')
     app.register_blueprint(clients_bp, url_prefix='/api/clients')
     app.register_blueprint(schedule_bp, url_prefix='/api/schedule')
     app.register_blueprint(tasks_bp, url_prefix='/api/tasks')
@@ -22,6 +25,7 @@ def register_blueprints(app):
     app.register_blueprint(session_plans_bp, url_prefix='/api/session-plans')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
+    app.register_blueprint(export_bp, url_prefix='/api/export')
 
     # Stripe (optional — only if keys configured)
     if app.config.get('STRIPE_SECRET_KEY'):

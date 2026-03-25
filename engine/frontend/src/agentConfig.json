@@ -1,7 +1,7 @@
 {
   "name": "Lens Cap",
   "tagline": "Your AI second shooter",
-  "welcome_message": "Hey \u2014 Lens Cap here. What are we shooting today?",
+  "welcome_message": "Hey — Lens Cap here. What are we shooting today?",
   "suggestions": [
     "Build a shot list for my next session",
     "Draft a client email",
@@ -12,7 +12,7 @@
     "primary_color": "#3D3229",
     "secondary_color": "#C9956B",
     "background": "#FBF9F7",
-    "logo": "/logo.png",
+    "logo": "agent/static/logo.png",
     "fonts": {
       "heading": "Caveat",
       "body": "Quicksand"
@@ -76,11 +76,48 @@
       },
       {
         "title": "Ask Lens Cap",
-        "description": "Shot lists, emails, lighting \u2014 just ask",
+        "description": "Shot lists, emails, lighting — just ask",
         "icon": "Chat",
         "color": "#A07040",
         "route": "/chat"
       }
     ]
+  },
+  "spokes": {
+    "clients": {
+      "enabled": true,
+      "label": "Shoots",
+      "label_singular": "Shoot",
+      "icon": "CameraAlt",
+      "color": "#E94560"
+    },
+    "schedule": {
+      "enabled": true,
+      "label": "Calendar",
+      "label_singular": "Event",
+      "icon": "CalendarMonth",
+      "color": "#42A5F5"
+    },
+    "tasks": {
+      "enabled": true,
+      "label": "Tasks",
+      "label_singular": "Task",
+      "icon": "CheckCircle",
+      "color": "#66BB6A"
+    },
+    "expenses": {
+      "enabled": true,
+      "label": "Expenses",
+      "label_singular": "Expense",
+      "icon": "Receipt",
+      "color": "#AB47BC"
+    },
+    "notes": {
+      "enabled": true,
+      "label": "Notes",
+      "label_singular": "Note",
+      "icon": "Description",
+      "color": "#FFA726"
+    }
   }
 }

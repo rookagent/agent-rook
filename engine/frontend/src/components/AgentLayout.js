@@ -5,7 +5,8 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Typography, IconButton, Tooltip, Fab } from '@mui/material';
-import { Logout, ConfirmationNumber, Chat, CameraAlt } from '@mui/icons-material';
+import { Logout, ConfirmationNumber, Chat, CameraAlt, DarkMode, LightMode } from '@mui/icons-material';
+import { useThemeMode } from '../App';
 import { useAuth } from '../context/AuthContext';
 import config from '../agentConfig.json';
 
@@ -17,6 +18,17 @@ const PALETTE = {
   border: config.branding.primary_color + '14',
   navBg: '#FFFFFF',
 };
+
+function ThemeToggle() {
+  const { mode, toggle } = useThemeMode();
+  return (
+    <Tooltip title={mode === 'light' ? 'Dark mode' : 'Light mode'}>
+      <IconButton size="small" onClick={toggle} sx={{ color: PALETTE.subtext }}>
+        {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
+      </IconButton>
+    </Tooltip>
+  );
+}
 
 function AgentNav() {
   const navigate = useNavigate();
@@ -65,6 +77,7 @@ function AgentNav() {
             {firstName}
           </Typography>
         )}
+        <ThemeToggle />
         {isLoggedIn && (
           <Tooltip title="Log out">
             <IconButton size="small" onClick={() => { logout(); navigate('/'); }} sx={{ color: PALETTE.subtext }}>

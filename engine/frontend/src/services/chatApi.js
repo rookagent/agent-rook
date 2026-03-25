@@ -114,6 +114,82 @@ export async function sendChatMessage(message, history = []) {
 }
 
 /**
+ * Stream a chat message via SSE. Words appear in real-time.
+ * @param {string} message
+ * @param {Array} history
+ * @param {Object} callbacks - { onToken, onStatus, onDone, onError }
+ */
+export async function streamChatMessage(message, history = [], { onToken, onStatus, onDone, onError } = {}) {
+  const token = getToken();
+
+  try {
+    const response = await fetch(`${API_URL}/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ message, history }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        if (onError) onError('Session expired. Please log in again.');
+        return;
+      }
+      const errMsg = await _friendlyError(response);
+      if (onError) onError(errMsg);
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let gotDone = false;
+
+    const TIMEOUT_MS = 45000;
+    let timeoutId = setTimeout(() => { try { reader.cancel(); } catch (_) {} }, TIMEOUT_MS);
+    const resetTimeout = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => { try { reader.cancel(); } catch (_) {} }, TIMEOUT_MS);
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        resetTimeout();
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const payload = JSON.parse(line.slice(6));
+            if (payload.type === 'heartbeat') continue;
+            if (payload.type === 'token' && onToken) onToken(payload.text);
+            if (payload.type === 'status' && onStatus) onStatus(payload.text);
+            if (payload.type === 'error' && onError) onError(payload.text);
+            if (payload.type === 'done') {
+              gotDone = true;
+              if (onDone) onDone(payload);
+            }
+          } catch (_) {}
+        }
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!gotDone && onDone) onDone({ data: null });
+  } catch (err) {
+    if (onError) onError(err.message || 'Connection lost. Try again.');
+  }
+}
+
+/**
  * Register a new account.
  * Returns { token, user, message }
  */

@@ -29,7 +29,7 @@ import {
   PrintOutlined,
   Refresh,
 } from '@mui/icons-material';
-import { sendChatMessage } from '../services/chatApi';
+import { streamChatMessage } from '../services/chatApi';
 import { useAuth } from '../context/AuthContext';
 import config from '../agentConfig.json';
 import ReactMarkdown from 'react-markdown';
@@ -243,22 +243,68 @@ function ChatWidget({ initialPrompt }) {
         .map((m) => ({ role: m.role, content: m.content }))
         .slice(-maxHistory);
 
-      const response = await sendChatMessage(messageText, history.slice(0, -1));
-
+      // Add empty streaming assistant message
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: response.message,
-        },
+        { role: 'assistant', content: '', streaming: true },
       ]);
 
-      // Update credit balance from response
-      if (response.remaining !== undefined) {
-        updateCredits(response.remaining);
-      }
+      let fullText = '';
+      let hadError = false;
 
-      setConsecutiveErrors(0);
+      await streamChatMessage(messageText, history.slice(0, -1), {
+        onToken: (chunk) => {
+          fullText += chunk;
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (updated[lastIdx]?.streaming) {
+              updated[lastIdx] = { ...updated[lastIdx], content: fullText };
+            }
+            return updated;
+          });
+        },
+        onStatus: (statusText) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (updated[lastIdx]?.streaming) {
+              updated[lastIdx] = { ...updated[lastIdx], status: statusText };
+            }
+            return updated;
+          });
+        },
+        onDone: (payload) => {
+          if (payload?.credits_remaining !== undefined) {
+            updateCredits(payload.credits_remaining);
+          }
+        },
+        onError: (errMsg) => {
+          hadError = true;
+          fullText = errMsg || "Something went wrong. Try again in a moment.";
+        },
+      });
+
+      // Finalize — remove streaming flag
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (updated[lastIdx]?.streaming) {
+          updated[lastIdx] = {
+            role: 'assistant',
+            content: fullText || "Done!",
+            isError: hadError,
+            retryMessage: hadError ? messageText : undefined,
+          };
+        }
+        return updated;
+      });
+
+      if (hadError) {
+        setConsecutiveErrors((prev) => prev + 1);
+      } else {
+        setConsecutiveErrors(0);
+      }
     } catch (err) {
       setConsecutiveErrors((prev) => prev + 1);
       const errorCount = consecutiveErrors + 1;
@@ -383,6 +429,22 @@ function ChatWidget({ initialPrompt }) {
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                       {msg.content}
                     </ReactMarkdown>
+                    {msg.streaming && (
+                      <Box component="span" sx={{
+                        display: 'inline-block', width: 6, height: 14,
+                        bgcolor: 'primary.main', ml: 0.3, mb: '-2px',
+                        animation: 'blink 1s step-end infinite',
+                        '@keyframes blink': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0 } },
+                      }} />
+                    )}
+                    {msg.status && msg.streaming && (
+                      <Typography variant="caption" sx={{
+                        display: 'block', mt: 0.5, color: 'primary.light',
+                        fontStyle: 'italic', fontSize: '0.75rem',
+                      }}>
+                        {msg.status}
+                      </Typography>
+                    )}
                   </Box>
                 ) : (
                   <Typography variant="body2" sx={{ fontSize: '0.88rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>

@@ -1,0 +1,160 @@
+agent:
+  name: "Sparky"
+  tagline: "Your personal learning buddy"
+  personality: |
+    You are Sparky, a personal tutor for elementary and middle school students.
+    You're patient, encouraging, and genuinely excited about learning.
+
+    You explain concepts using everyday examples kids can relate to — pizza
+    slices for fractions, jumping rope for counting by twos, the solar system
+    for big numbers. You never make a student feel dumb for not knowing something.
+
+    When a student gets something right, celebrate it. When they get it wrong,
+    help them figure out WHY — don't just give the answer. Ask guiding questions.
+
+    Use analogies, visual descriptions, and step-by-step breakdowns. Keep
+    language simple but never condescending. Match your energy to the student's
+    age — silly jokes for younger kids, more chill for older ones.
+
+    If a student is struggling, slow down. If they're flying through it, challenge
+    them. You adapt. That's what great tutors do.
+
+    End of every session with encouragement. "You're getting better at this!"
+
+branding:
+  primary_color: "#2D5BA4"
+  secondary_color: "#F5A623"
+  background: "#F8FAFF"
+  logo: "agent/static/logo.png"
+  fonts:
+    heading: "Caveat"
+    body: "Quicksand"
+
+chat:
+  welcome_message: "Hey there! I'm Sparky, your learning buddy. What are we working on today?"
+  suggestions:
+    - "Help me with fractions"
+    - "Quiz me on multiplication"
+    - "Explain the solar system"
+    - "Help with my homework"
+  max_history: 20
+
+ai:
+  provider: "anthropic"
+  smart_model: "claude-sonnet-4-20250514"
+  fast_model: "claude-haiku-4-20250514"
+  max_tokens: 4096
+
+access:
+  free_messages_per_day: 10
+
+dashboard:
+  greeting: true
+  cards:
+    - title: "Practice Math"
+      description: "Addition, subtraction, multiplication, fractions"
+      icon: "Calculate"
+      color: "#4A90D9"
+      route: "/chat"
+    - title: "Science Explorer"
+      description: "Earth, space, animals, plants, weather"
+      icon: "Science"
+      color: "#5DAE5D"
+      route: "/chat"
+    - title: "Quiz Me"
+      description: "Test what you know with fun quizzes"
+      icon: "Quiz"
+      color: "#F5A623"
+      route: "/chat"
+    - title: "Homework Help"
+      description: "Get unstuck on any assignment"
+      icon: "MenuBook"
+      color: "#E8734A"
+      route: "/chat"
+    - title: "Assignments"
+      description: "Track homework and due dates"
+      icon: "CheckCircle"
+      color: "#7B68B8"
+      route: "/tasks"
+    - title: "Study Notes"
+      description: "Save what you learned"
+      icon: "Description"
+      color: "#4AB8B8"
+      route: "/notes"
+    - title: "Test Dates"
+      description: "When are your tests coming up?"
+      icon: "CalendarMonth"
+      color: "#D45D5D"
+      route: "/schedule"
+    - title: "Ask Sparky"
+      description: "Any question, any subject — just ask"
+      icon: "Chat"
+      color: "#2D5BA4"
+      route: "/chat"
+
+spokes:
+  clients:
+    enabled: false
+  schedule:
+    enabled: true
+    label: "Test Dates"
+    label_singular: "Test"
+    icon: "CalendarMonth"
+    color: "#D45D5D"
+  tasks:
+    enabled: true
+    label: "Assignments"
+    label_singular: "Assignment"
+    icon: "CheckCircle"
+    color: "#7B68B8"
+  expenses:
+    enabled: false
+  notes:
+    enabled: true
+    label: "Study Notes"
+    label_singular: "Note"
+    icon: "Description"
+    color: "#4AB8B8"
+
+tools:
+  - name: "knowledge_base"
+    knowledge_tool: true
+  - name: "manage_data"
+    description: "Save assignments, study notes, and test dates for the student. Use this when they mention homework, tests, or want to save something they learned."
+    module: "agent.tools.spoke_tools"
+    function: "execute_spoke_tool"
+    schema:
+      type: "object"
+      properties:
+        resource:
+          type: "string"
+          enum: ["tasks", "schedule", "notes"]
+        action:
+          type: "string"
+          enum: ["create", "list", "update", "delete"]
+        data:
+          type: "object"
+        id:
+          type: "integer"
+        filters:
+          type: "object"
+      required: ["resource", "action"]
+
+outreach:
+  morning_briefing: true
+  weekly_roundup: true
+  briefing_hour: 7
+  roundup_day: "monday"
+
+knowledge:
+  directory: "agent/knowledge"
+
+memory:
+  enabled: true
+  extraction_categories:
+    - preferences
+    - facts
+    - goals
+    - grade_level
+    - subjects
+  session_ttl_seconds: 300
