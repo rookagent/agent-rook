@@ -13,7 +13,7 @@ export default function ChatPage() {
   const initialPrompt = location.state?.prompt || null;
 
   return (
-    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, bgcolor: '#FBF9F7' }}>
+    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, bgcolor: 'background.default' }}>
       <ChatWidget initialPrompt={initialPrompt} />
     </Box>
   );

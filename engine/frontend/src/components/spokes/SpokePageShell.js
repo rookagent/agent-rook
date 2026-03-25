@@ -11,7 +11,7 @@ export default function SpokePageShell({ title, color, onAdd, searchValue, onSea
   const navigate = useNavigate();
 
   return (
-    <Box sx={{ flexGrow: 1, px: { xs: 2, sm: 3, md: 4 }, py: 3, bgcolor: '#FBF9F7', minHeight: 0 }}>
+    <Box sx={{ flexGrow: 1, px: { xs: 2, sm: 3, md: 4 }, py: 3, bgcolor: 'background.default', minHeight: 0 }}>
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>

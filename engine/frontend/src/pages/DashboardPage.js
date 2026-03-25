@@ -114,7 +114,7 @@ export default function DashboardPage() {
   const hasOverviewData = upcomingEvents.length > 0 || pendingTasks.length > 0 || expensesMonth > 0;
 
   return (
-    <Box sx={{ flexGrow: 1, px: { xs: 2, sm: 3, md: 4 }, py: { xs: 3, sm: 4 }, bgcolor: '#FBF9F7' }}>
+    <Box sx={{ flexGrow: 1, px: { xs: 2, sm: 3, md: 4 }, py: { xs: 3, sm: 4 }, bgcolor: 'background.default' }}>
       <Box sx={{ maxWidth: 960, mx: 'auto' }}>
         {/* Greeting */}
         {dashboard.greeting && (
@@ -142,7 +142,7 @@ export default function DashboardPage() {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: { xs: 3, sm: 4 } }}>
 
             {/* Upcoming Events */}
-            <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'white' }}>
+            <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'background.paper' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                 <Event sx={{ fontSize: 18, color: '#5B8FB9' }} />
                 <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: primary_color }}>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
                     <Box key={evt.id} onClick={() => navigate('/schedule')}
                       sx={{
                         display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
-                        p: 1, borderRadius: 2, '&:hover': { bgcolor: '#f8f8f8' },
+                        p: 1, borderRadius: 2, '&:hover': { bgcolor: 'action.hover' },
                       }}>
                       <Box sx={{
                         width: 4, height: 32, borderRadius: 2, flexShrink: 0,
@@ -187,7 +187,7 @@ export default function DashboardPage() {
             {/* Tasks + Stats */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {/* Pending Tasks */}
-              <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'white', flexGrow: 1 }}>
+              <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'background.paper', flexGrow: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                   <CheckCircle sx={{ fontSize: 18, color: '#7BAF6E' }} />
                   <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: primary_color }}>
@@ -208,7 +208,7 @@ export default function DashboardPage() {
                       <Box key={task.id} onClick={() => navigate('/tasks')}
                         sx={{
                           display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
-                          p: 0.75, borderRadius: 1.5, '&:hover': { bgcolor: '#f8f8f8' },
+                          p: 0.75, borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' },
                         }}>
                         <Box sx={{
                           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
@@ -236,8 +236,8 @@ export default function DashboardPage() {
                 <Paper elevation={0} onClick={() => navigate('/clients')}
                   sx={{
                     p: 1.5, borderRadius: 2, textAlign: 'center', cursor: 'pointer',
-                    border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'white',
-                    '&:hover': { bgcolor: '#f8f8f8' },
+                    border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'action.hover' },
                   }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '1.2rem', color: primary_color }}>{counts.clients || 0}</Typography>
                   <Typography sx={{ fontSize: '0.68rem', color: 'text.secondary', fontWeight: 500 }}>Shoots</Typography>
@@ -245,8 +245,8 @@ export default function DashboardPage() {
                 <Paper elevation={0} onClick={() => navigate('/expenses')}
                   sx={{
                     p: 1.5, borderRadius: 2, textAlign: 'center', cursor: 'pointer',
-                    border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'white',
-                    '&:hover': { bgcolor: '#f8f8f8' },
+                    border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'action.hover' },
                   }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '1.2rem', color: '#9B7DB8' }}>
                     ${expensesMonth.toLocaleString()}
@@ -256,8 +256,8 @@ export default function DashboardPage() {
                 <Paper elevation={0} onClick={() => navigate('/notes')}
                   sx={{
                     p: 1.5, borderRadius: 2, textAlign: 'center', cursor: 'pointer',
-                    border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'white',
-                    '&:hover': { bgcolor: '#f8f8f8' },
+                    border: '1px solid', borderColor: `${primary_color}12`, bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'action.hover' },
                   }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '1.2rem', color: primary_color }}>{counts.notes || 0}</Typography>
                   <Typography sx={{ fontSize: '0.68rem', color: 'text.secondary', fontWeight: 500 }}>Notes</Typography>
@@ -269,7 +269,7 @@ export default function DashboardPage() {
           /* Empty state — first time user */
           <Paper elevation={0} sx={{
             p: 3, mb: { xs: 3, sm: 4 }, borderRadius: 3, textAlign: 'center',
-            border: '1px dashed', borderColor: `${primary_color}22`, bgcolor: 'white',
+            border: '1px dashed', borderColor: `${primary_color}22`, bgcolor: 'background.paper',
           }}>
             <Typography sx={{ fontSize: '0.9rem', color: primary_color, fontWeight: 600, mb: 0.5 }}>
               Welcome to {config.name}!

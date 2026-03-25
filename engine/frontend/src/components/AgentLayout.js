@@ -10,8 +10,23 @@ import { useThemeMode } from '../App';
 import { useAuth } from '../context/AuthContext';
 import config from '../agentConfig.json';
 
+// PALETTE is now a function so it can read the current theme mode
+function usePalette() {
+  const { mode } = useThemeMode();
+  const isDark = mode === 'dark';
+  return {
+    bg: isDark ? '#1A1A1A' : (config.branding.background || '#FBF9F7'),
+    headline: isDark ? '#E8E8E8' : config.branding.primary_color,
+    subtext: isDark ? '#A0A0A0' : config.branding.primary_color + '99',
+    gold: config.branding.secondary_color,
+    border: isDark ? '#333333' : config.branding.primary_color + '14',
+    navBg: isDark ? '#222222' : '#FFFFFF',
+    isDark,
+  };
+}
+// Static fallback for components that don't need reactivity
 const PALETTE = {
-  bg: '#FBF9F7',
+  bg: config.branding.background || '#FBF9F7',
   headline: config.branding.primary_color,
   subtext: config.branding.primary_color + '99',
   gold: config.branding.secondary_color,
@@ -33,6 +48,7 @@ function ThemeToggle() {
 function AgentNav() {
   const navigate = useNavigate();
   const { user, isLoggedIn, credits, isAdmin, logout } = useAuth();
+  const P = usePalette();
 
   const firstName = user?.name?.split(' ')[0] || '';
   const isUnlimited = isAdmin;
@@ -41,7 +57,7 @@ function AgentNav() {
     <Box sx={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       px: { xs: 2, md: 3 }, py: 1.5,
-      bgcolor: PALETTE.navBg, borderBottom: '1px solid', borderColor: PALETTE.border,
+      bgcolor: P.navBg, borderBottom: '1px solid', borderColor: P.border,
     }}>
       <Box
         sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
@@ -49,7 +65,7 @@ function AgentNav() {
       >
         <Typography sx={{
           fontFamily: `"${config.branding.fonts.heading}", cursive`,
-          fontWeight: 700, color: PALETTE.headline, fontSize: '1.3rem', lineHeight: 1,
+          fontWeight: 700, color: P.headline, fontSize: '1.3rem', lineHeight: 1,
         }}>
           {config.name}
         </Typography>
@@ -62,25 +78,25 @@ function AgentNav() {
               sx={{
                 display: 'flex', alignItems: 'center', gap: 0.5,
                 px: 1.25, py: 0.4, borderRadius: '50px', cursor: 'pointer',
-                bgcolor: credits > 0 ? `${PALETTE.headline}14` : `${PALETTE.gold}1F`,
-                '&:hover': { bgcolor: credits > 0 ? `${PALETTE.headline}22` : `${PALETTE.gold}33` },
+                bgcolor: credits > 0 ? `${P.headline}14` : `${P.gold}1F`,
+                '&:hover': { bgcolor: credits > 0 ? `${P.headline}22` : `${P.gold}33` },
               }}>
-              <ConfirmationNumber sx={{ fontSize: 14, color: credits > 0 ? PALETTE.headline : PALETTE.gold }} />
-              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: credits > 0 ? PALETTE.headline : PALETTE.gold }}>
+              <ConfirmationNumber sx={{ fontSize: 14, color: credits > 0 ? P.headline : P.gold }} />
+              <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: credits > 0 ? P.headline : P.gold }}>
                 {credits > 0 ? credits : 'Get Credits'}
               </Typography>
             </Box>
           </Tooltip>
         )}
         {isLoggedIn && firstName && (
-          <Typography sx={{ fontWeight: 500, color: PALETTE.subtext, fontSize: '0.85rem', display: { xs: 'none', sm: 'block' } }}>
+          <Typography sx={{ fontWeight: 500, color: P.subtext, fontSize: '0.85rem', display: { xs: 'none', sm: 'block' } }}>
             {firstName}
           </Typography>
         )}
         <ThemeToggle />
         {isLoggedIn && (
           <Tooltip title="Log out">
-            <IconButton size="small" onClick={() => { logout(); navigate('/'); }} sx={{ color: PALETTE.subtext }}>
+            <IconButton size="small" onClick={() => { logout(); navigate('/'); }} sx={{ color: P.subtext }}>
               <Logout fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -91,9 +107,10 @@ function AgentNav() {
 }
 
 function AgentFooter() {
+  const P = usePalette();
   return (
-    <Box sx={{ py: 2, px: { xs: 2, md: 3 }, textAlign: 'center', borderTop: '1px solid', borderColor: PALETTE.border }}>
-      <Typography sx={{ fontWeight: 400, color: '#bbb', fontSize: '0.72rem' }}>
+    <Box sx={{ py: 2, px: { xs: 2, md: 3 }, textAlign: 'center', borderTop: '1px solid', borderColor: P.border }}>
+      <Typography sx={{ fontWeight: 400, color: P.isDark ? '#666' : '#bbb', fontSize: '0.72rem' }}>
         Powered by <strong>Agent Rook</strong> &mdash; Your Strategic AI Scaffold
       </Typography>
     </Box>
@@ -130,8 +147,9 @@ function FloatingChatButton() {
 }
 
 export default function AgentLayout({ children }) {
+  const P = usePalette();
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: PALETTE.bg }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: P.bg }}>
       <AgentNav />
       <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {children}

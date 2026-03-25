@@ -158,7 +158,7 @@ export default function ChecklistsPage() {
             {activeList.items.map((item, idx) => (
               <Box key={idx} sx={{
                 display: 'flex', alignItems: 'center', gap: 0.5,
-                p: 1, borderRadius: 2, bgcolor: item.checked ? '#f5f5f5' : 'white',
+                p: 1, borderRadius: 2, bgcolor: item.checked ? 'action.hover' : 'background.paper',
                 border: '1px solid', borderColor: 'divider',
               }}>
                 <Checkbox checked={item.checked} onChange={() => toggleItem(activeList, idx)}

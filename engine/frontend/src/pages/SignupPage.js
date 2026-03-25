@@ -51,7 +51,7 @@ export default function SignupPage() {
   return (
     <Box sx={{
       flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      px: 2, py: 4, bgcolor: '#FBF9F7',
+      px: 2, py: 4, bgcolor: 'background.default',
     }}>
       <Paper elevation={1} sx={{ maxWidth: 400, width: '100%', p: 4, borderRadius: 3 }}>
         <Typography

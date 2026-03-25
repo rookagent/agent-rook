@@ -436,7 +436,7 @@ function ChatWidget({ initialPrompt }) {
           <Box sx={{ maxWidth: 600, mx: 'auto', width: '100%', mt: { xs: 2, sm: 4 } }}>
             <Box
               sx={{
-                bgcolor: 'white',
+                bgcolor: 'background.paper',
                 p: 3,
                 borderRadius: '4px 16px 16px 16px',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
@@ -457,7 +457,7 @@ function ChatWidget({ initialPrompt }) {
                   size="small"
                   onClick={() => handleSend(suggestion)}
                   sx={{
-                    bgcolor: 'white',
+                    bgcolor: 'background.paper',
                     border: '1px solid',
                     borderColor: 'primary.light',
                     color: 'primary.main',
@@ -481,7 +481,7 @@ function ChatWidget({ initialPrompt }) {
                   maxWidth: '85%',
                   p: 2,
                   borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                  bgcolor: msg.role === 'user' ? 'primary.main' : 'white',
+                  bgcolor: msg.role === 'user' ? 'primary.main' : 'background.paper',
                   color: msg.role === 'user' ? 'white' : 'text.primary',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                 }}
@@ -561,7 +561,7 @@ function ChatWidget({ initialPrompt }) {
             <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
               <Box
                 sx={{
-                  bgcolor: 'white',
+                  bgcolor: 'background.paper',
                   px: 2,
                   py: 1.2,
                   borderRadius: '4px 16px 16px 16px',
@@ -602,7 +602,7 @@ function ChatWidget({ initialPrompt }) {
           p: { xs: 1.5, sm: 2 },
           borderTop: '1px solid',
           borderColor: 'divider',
-          bgcolor: 'white',
+          bgcolor: 'background.paper',
           display: 'flex',
           gap: 1,
           alignItems: 'flex-end',

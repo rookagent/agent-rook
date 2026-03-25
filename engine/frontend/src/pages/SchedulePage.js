@@ -168,7 +168,7 @@ export default function SchedulePage() {
               sx={{
                 p: 0.75, borderRadius: 1.5, minHeight: { xs: 60, sm: 80 }, cursor: 'pointer',
                 border: '1px solid', borderColor: isToday ? spoke.color : inMonth ? 'divider' : 'transparent',
-                bgcolor: isToday ? `${spoke.color}0A` : inMonth ? 'white' : '#FAFAFA',
+                bgcolor: isToday ? `${spoke.color}0A` : inMonth ? 'background.paper' : 'action.hover',
                 opacity: inMonth ? 1 : 0.4,
                 '&:hover': { borderColor: spoke.color, bgcolor: `${spoke.color}05` },
               }}>

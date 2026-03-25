@@ -32,7 +32,7 @@ export default function UpgradePage() {
   };
 
   return (
-    <Box sx={{ flexGrow: 1, px: 2, py: 4, bgcolor: '#FBF9F7' }}>
+    <Box sx={{ flexGrow: 1, px: 2, py: 4, bgcolor: 'background.default' }}>
       <Box sx={{ maxWidth: 600, mx: 'auto' }}>
         {/* Back button */}
         <Button
