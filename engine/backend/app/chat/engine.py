@@ -155,6 +155,13 @@ def chat(user, message, conversation_history=None):
             'limit_reached': True,
         }
 
+    # ── Write-through memory (real-time keyword catch, ~10ms) ──
+    try:
+        from .memory_extraction import write_through_memory
+        write_through_memory(user.id, message)
+    except Exception as e:
+        logger.warning(f"Write-through memory failed (non-fatal): {e}")
+
     # ── Model selection ──
     model = MODEL_FAST if is_simple_query(message) else MODEL_SMART
 
