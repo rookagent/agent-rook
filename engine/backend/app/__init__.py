@@ -58,7 +58,12 @@ def create_app(config_class=None):
     register_blueprints(app)
 
     # Import models so Alembic sees them
-    from .models import user, agent_memory, subscription, promo_code
+    from .models import user, agent_memory, subscription, promo_code, client, schedule_event, task, note, expense, checklist, session_plan
+
+    # Register chat tools from agent.yaml
+    with app.app_context():
+        from .chat.engine import register_tools
+        register_tools(app)
 
     # Sentry (optional)
     dsn = app.config.get('SENTRY_DSN')

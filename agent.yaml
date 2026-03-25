@@ -1,27 +1,33 @@
 agent:
-  name: "Chef Rook"
-  tagline: "Your AI sous chef"
+  name: "Lens Cap"
+  tagline: "Your AI second shooter"
   personality: |
-    You are Chef Rook, a warm but no-nonsense culinary assistant.
-    You help solo food business operators plan meals, track recipes, and manage their kitchen.
-    You believe everyone can cook well with the right guidance.
-    Be practical, not pretentious. Home cooking over fine dining.
+    You are Lens Cap, a photography assistant built for working photographers.
+    You think like a seasoned second shooter — practical, fast, creative, and always
+    watching the clock. You know that a wedding day doesn't pause for troubleshooting,
+    so your answers are direct and actionable. You understand both the art (composition,
+    light, emotion) and the business (pricing, contracts, client management).
+    You speak in plain language with natural photographer terminology. You're supportive
+    but honest — if a plan has a flaw, you flag it and offer a fix.
+    You never talk down to the photographer or over-explain basics they already know.
+    Gender-neutral by default ("the couple" not "bride and groom"). Occasional dry humor welcome.
 
 branding:
-  primary_color: "#2D4A3E"
-  secondary_color: "#D4A843"
+  primary_color: "#3D3229"
+  secondary_color: "#C9956B"
+  background: "#FBF9F7"
   logo: "agent/static/logo.png"
   fonts:
     heading: "Caveat"
     body: "Quicksand"
 
 chat:
-  welcome_message: "Hey! I'm Chef Rook. What are we cooking today?"
+  welcome_message: "Hey — Lens Cap here. What are we shooting today?"
   suggestions:
-    - "Plan this week's meals"
-    - "What's in season right now?"
-    - "Help me use up leftover chicken"
-    - "Teach me a new technique"
+    - "Build a shot list for my next session"
+    - "Draft a client email"
+    - "Help me plan a session timeline"
+    - "What should I post this week?"
   max_history: 20
 
 ai:
@@ -33,6 +39,111 @@ ai:
 access:
   free_messages_per_day: 3
 
+dashboard:
+  greeting: true
+  cards:
+    - title: "Shoots"
+      description: "Track sessions, clients, and bookings"
+      icon: "CameraAlt"
+      color: "#C9956B"
+      route: "/clients"
+    - title: "Calendar"
+      description: "See what's coming up"
+      icon: "CalendarMonth"
+      color: "#A89080"
+      route: "/schedule"
+    - title: "Session Plans"
+      description: "Build timelines for upcoming shoots"
+      icon: "Schedule"
+      color: "#C4908A"
+      route: "/session-plans"
+    - title: "Gear Checklists"
+      description: "Pack the right kit every time"
+      icon: "Inventory"
+      color: "#8A8580"
+      route: "/checklists"
+    - title: "Tasks"
+      description: "Your to-do list"
+      icon: "CheckCircle"
+      color: "#B8A070"
+      route: "/tasks"
+    - title: "Expenses"
+      description: "Track business costs"
+      icon: "Receipt"
+      color: "#B87E6A"
+      route: "/expenses"
+    - title: "Notes"
+      description: "Ideas, session notes, anything"
+      icon: "Description"
+      color: "#9AAA8C"
+      route: "/notes"
+    - title: "Ask Lens Cap"
+      description: "Shot lists, emails, lighting — just ask"
+      icon: "Chat"
+      color: "#A07040"
+      route: "/chat"
+
+spokes:
+  clients:
+    enabled: true
+    label: "Shoots"
+    label_singular: "Shoot"
+    icon: "CameraAlt"
+    color: "#E94560"
+  schedule:
+    enabled: true
+    label: "Calendar"
+    label_singular: "Event"
+    icon: "CalendarMonth"
+    color: "#42A5F5"
+  tasks:
+    enabled: true
+    label: "Tasks"
+    label_singular: "Task"
+    icon: "CheckCircle"
+    color: "#66BB6A"
+  expenses:
+    enabled: true
+    label: "Expenses"
+    label_singular: "Expense"
+    icon: "Receipt"
+    color: "#AB47BC"
+  notes:
+    enabled: true
+    label: "Notes"
+    label_singular: "Note"
+    icon: "Description"
+    color: "#FFA726"
+
+tools:
+  - name: "knowledge_base"
+    knowledge_tool: true
+  - name: "manage_data"
+    description: "Create, list, update, or delete data in the app — expenses, shoots, tasks, calendar events, notes, checklists, and session plans. Use this whenever the user wants to save, track, log, add, remove, edit, or view their data. IMPORTANT: Use 'list' first to find existing record IDs before updating or deleting. For checklists, use update with add_items to add to an existing list instead of creating a new one. Always include the ID when updating or deleting."
+    module: "agent.tools.spoke_tools"
+    function: "execute_spoke_tool"
+    schema:
+      type: "object"
+      properties:
+        resource:
+          type: "string"
+          description: "Which data to manage: expenses, clients, tasks, schedule, notes, checklists, session_plans"
+          enum: ["expenses", "clients", "tasks", "schedule", "notes", "checklists", "session_plans"]
+        action:
+          type: "string"
+          description: "What to do: create, list, update, delete"
+          enum: ["create", "list", "update", "delete"]
+        data:
+          type: "object"
+          description: "Fields for create/update. For expenses: {description, amount, category, date, vendor}. For clients/shoots: {name, email, phone, notes, tags}. For tasks: {title, description, priority, due_date, status}. For schedule: {title, date, start_time, end_time, description}. For notes: {title, content, tags}. For checklists: {title, shoot_type, items (list of strings)} for create, or {add_items (list of strings)} to add to existing, or {remove_item (string)} to remove one. For session_plans: {title, session_type, date, location, client_name, blocks} for create, or {add_blocks} to append blocks."
+        id:
+          type: "integer"
+          description: "Record ID for update/delete actions"
+        filters:
+          type: "object"
+          description: "Filters for list action: {category, status, q (search), upcoming (bool), limit (int)}"
+      required: ["resource", "action"]
+
 knowledge:
   directory: "agent/knowledge"
 
@@ -42,4 +153,6 @@ memory:
     - preferences
     - facts
     - goals
+    - gear
+    - clients
   session_ttl_seconds: 300

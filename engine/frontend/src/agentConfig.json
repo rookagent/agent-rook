@@ -1,0 +1,86 @@
+{
+  "name": "Lens Cap",
+  "tagline": "Your AI second shooter",
+  "welcome_message": "Hey \u2014 Lens Cap here. What are we shooting today?",
+  "suggestions": [
+    "Build a shot list for my next session",
+    "Draft a client email",
+    "Help me plan a session timeline",
+    "What should I post this week?"
+  ],
+  "branding": {
+    "primary_color": "#3D3229",
+    "secondary_color": "#C9956B",
+    "background": "#FBF9F7",
+    "logo": "/logo.png",
+    "fonts": {
+      "heading": "Caveat",
+      "body": "Quicksand"
+    }
+  },
+  "access": {
+    "free_messages_per_day": 3
+  },
+  "api_url": "/api",
+  "dashboard": {
+    "greeting": true,
+    "cards": [
+      {
+        "title": "Shoots",
+        "description": "Track sessions, clients, and bookings",
+        "icon": "CameraAlt",
+        "color": "#C9956B",
+        "route": "/clients"
+      },
+      {
+        "title": "Calendar",
+        "description": "See what's coming up",
+        "icon": "CalendarMonth",
+        "color": "#A89080",
+        "route": "/schedule"
+      },
+      {
+        "title": "Session Plans",
+        "description": "Build timelines for upcoming shoots",
+        "icon": "Schedule",
+        "color": "#C4908A",
+        "route": "/session-plans"
+      },
+      {
+        "title": "Gear Checklists",
+        "description": "Pack the right kit every time",
+        "icon": "Inventory",
+        "color": "#8A8580",
+        "route": "/checklists"
+      },
+      {
+        "title": "Tasks",
+        "description": "Your to-do list",
+        "icon": "CheckCircle",
+        "color": "#B8A070",
+        "route": "/tasks"
+      },
+      {
+        "title": "Expenses",
+        "description": "Track business costs",
+        "icon": "Receipt",
+        "color": "#B87E6A",
+        "route": "/expenses"
+      },
+      {
+        "title": "Notes",
+        "description": "Ideas, session notes, anything",
+        "icon": "Description",
+        "color": "#9AAA8C",
+        "route": "/notes"
+      },
+      {
+        "title": "Ask Lens Cap",
+        "description": "Shot lists, emails, lighting \u2014 just ask",
+        "icon": "Chat",
+        "color": "#A07040",
+        "route": "/chat"
+      }
+    ]
+  }
+}

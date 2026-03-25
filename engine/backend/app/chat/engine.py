@@ -10,6 +10,13 @@ and genericized for any domain.
 import json
 import logging
 import importlib
+import os
+import sys
+
+# Ensure project root is on path so agent.tools.* can be imported
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from app.utils.ai_client import ai_complete, MODEL_FAST, MODEL_SMART
 from .routing import is_simple_query
