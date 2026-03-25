@@ -19,6 +19,7 @@ import ExpensesPage from './pages/ExpensesPage';
 import ChecklistsPage from './pages/ChecklistsPage';
 import SessionPlansPage from './pages/SessionPlansPage';
 import NotesPage from './pages/NotesPage';
+import MemoriesPage from './pages/MemoriesPage';
 
 // Theme context
 const ThemeModeContext = createContext({ mode: 'light', toggle: () => {} });
@@ -52,6 +53,7 @@ function AppRoutes() {
       <Route path="/checklists" element={<ProtectedRoute><ChecklistsPage /></ProtectedRoute>} />
       <Route path="/session-plans" element={<ProtectedRoute><SessionPlansPage /></ProtectedRoute>} />
       <Route path="/notes" element={<ProtectedRoute><NotesPage /></ProtectedRoute>} />
+      <Route path="/memories" element={<ProtectedRoute><MemoriesPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
