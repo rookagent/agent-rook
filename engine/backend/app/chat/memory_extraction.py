@@ -125,6 +125,9 @@ RULES:
 - Do NOT extract anything {agent_name} said — only what the USER shared
 - If user corrected earlier information, use the CORRECTED version only
 - For schedule/timing info, capture the full context ("Works Mon-Fri 9-5" not just "9-5")
+- For procedures: extract rules about HOW {agent_name} should behave — things like
+  "always respond in bullet points", "never suggest dairy — I'm lactose intolerant",
+  "check my calendar before scheduling anything". These modify behavior, not just knowledge.
 
 CATEGORIES: {', '.join(categories)}
 
@@ -132,7 +135,9 @@ CONVERSATION:
 {transcript}
 
 Return a JSON array of extracted memories. Each item:
-{{"type": "preference|fact|goal|interaction", "content": "what you learned", "category": "one of the categories above", "confidence": 0.7-0.95}}
+{{"type": "preference|fact|goal|interaction|procedure", "content": "what you learned", "category": "one of the categories above", "confidence": 0.7-0.95}}
+
+Use type "procedure" for behavioral rules the user wants you to follow in future conversations.
 
 If nothing worth remembering was said, return an empty array: []
 """

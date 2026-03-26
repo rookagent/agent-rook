@@ -11,6 +11,8 @@ Memory types:
 - goal: "Learning Rust", "Building a SaaS product"
 - interaction: "Asked about deployment last week", "We debugged auth together"
 - schedule: Structured schedule data stored as JSON in structured_data column
+- procedure: Behavioral rules — HOW the agent should act, not just facts.
+  Protected from decay and smart cap (like schedule). Max 10 per user.
 
 Memories have confidence scores and decay over time if not reinforced.
 Each conversation can add, update, or reinforce existing memories.
@@ -21,6 +23,13 @@ import logging
 import pytz
 from datetime import datetime
 from app.extensions import db
+
+# pgvector — graceful degradation if not installed
+try:
+    from pgvector.sqlalchemy import Vector
+    _PGVECTOR_AVAILABLE = True
+except ImportError:
+    _PGVECTOR_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +59,7 @@ class AgentMemory(db.Model):
         db.String(20),
         nullable=False,
         default='fact',
-    )  # preference, fact, goal, interaction, schedule
+    )  # preference, fact, goal, interaction, schedule, procedure
     content = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(50))  # e.g. workflow, tools, personal, schedule, project
 
@@ -78,6 +87,11 @@ class AgentMemory(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # = recorded_at
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     occurred_at = db.Column(db.DateTime, nullable=True)  # when the fact actually happened (if stated)
+
+    # Semantic embedding (384-dim vector for all-MiniLM-L6-v2)
+    # NULL when pgvector isn't installed or embedding generation failed
+    if _PGVECTOR_AVAILABLE:
+        embedding = db.Column(Vector(384), nullable=True)
 
     # Relationships
     user = db.relationship('User', backref=db.backref('agent_memories', lazy='dynamic'))
@@ -243,6 +257,7 @@ class AgentMemory(db.Model):
         Returns a string block ready to paste into the prompt.
 
         Category-aware retrieval:
+        - Always include ALL procedure memories (up to 10) — behavioral rules
         - Always include ALL schedule memories (up to 5)
         - Fill remaining slots with other types by confidence + recency
         - Total cap: 40 memories
@@ -257,7 +272,15 @@ class AgentMemory(db.Model):
 
         base_filters = {'is_active': True, 'user_id': user_id}
 
-        # 1. Always get schedule memories (up to 5)
+        # 1. Always get procedure memories (up to 10) — behavioral rules, highest priority
+        procedure_memories = (
+            AgentMemory.query.filter_by(**base_filters, memory_type='procedure')
+            .order_by(AgentMemory.last_reinforced.desc())
+            .limit(10)
+            .all()
+        )
+
+        # 2. Always get schedule memories (up to 5)
         schedule_memories = (
             AgentMemory.query.filter_by(**base_filters, memory_type='schedule')
             .order_by(AgentMemory.last_reinforced.desc())
@@ -265,14 +288,14 @@ class AgentMemory(db.Model):
             .all()
         )
 
-        # 2. Fill remaining slots with other types
-        priority_ids = [m.id for m in schedule_memories]
+        # 3. Fill remaining slots with other types
+        priority_ids = [m.id for m in procedure_memories] + [m.id for m in schedule_memories]
         remaining_slots = limit - len(priority_ids)
 
         if remaining_slots > 0:
             other_query = (
                 AgentMemory.query.filter_by(**base_filters)
-                .filter(AgentMemory.memory_type != 'schedule')
+                .filter(AgentMemory.memory_type.notin_(['schedule', 'procedure']))
             )
             if priority_ids:
                 other_query = other_query.filter(AgentMemory.id.notin_(priority_ids))
@@ -285,12 +308,20 @@ class AgentMemory(db.Model):
         else:
             other_memories = []
 
-        all_memories = schedule_memories + other_memories
+        all_memories = procedure_memories + schedule_memories + other_memories
 
         if not all_memories:
             return ""
 
         lines = []
+
+        # Render procedure memories as behavioral instructions (ABOVE everything else)
+        if procedure_memories:
+            lines.append("LEARNED BEHAVIORS (from previous conversations):")
+            lines.append("These are rules and preferences about HOW you should behave. Follow them.")
+            for m in procedure_memories:
+                lines.append(f"- {m.content}")
+            lines.append("")
 
         # Render schedule memories with structured data
         if schedule_memories:
@@ -375,36 +406,68 @@ class AgentMemory(db.Model):
         lines = []
         org_memories = []
         personal_memories = []
+        procedure_memories = []
 
-        # 1. Organization-scoped memories (up to 15)
+        # 0. Always get procedure memories first (up to 10) — behavioral rules
+        if user_id:
+            procedure_memories = (
+                cls.query.filter(
+                    cls.user_id == user_id,
+                    cls.is_active == True,
+                    cls.memory_type == 'procedure',
+                )
+                .order_by(cls.last_reinforced.desc())
+                .limit(10)
+                .all()
+            )
+
+        procedure_ids = {m.id for m in procedure_memories}
+
+        # 1. Organization-scoped memories (up to 15), excluding procedures already fetched
         if org_id:
             from sqlalchemy import or_
+            org_query = cls.query.filter(
+                cls.org_id == org_id,
+                cls.is_active == True,
+                cls.memory_type != 'procedure',
+                or_(cls.user_id.is_(None), cls.user_id == user_id),
+            )
+            if procedure_ids:
+                org_query = org_query.filter(cls.id.notin_(procedure_ids))
             org_memories = (
-                cls.query.filter(
-                    cls.org_id == org_id,
-                    cls.is_active == True,
-                    or_(cls.user_id.is_(None), cls.user_id == user_id),
-                )
+                org_query
                 .order_by(cls.confidence.desc(), cls.last_reinforced.desc())
                 .limit(15)
                 .all()
             )
 
-        # 2. Personal memories — user-scoped only, no org (up to 10)
+        # 2. Personal memories — user-scoped only, no org (up to 10), excluding procedures
         if user_id:
+            personal_query = cls.query.filter(
+                cls.user_id == user_id,
+                cls.org_id.is_(None),
+                cls.is_active == True,
+                cls.memory_type != 'procedure',
+            )
+            if procedure_ids:
+                personal_query = personal_query.filter(cls.id.notin_(procedure_ids))
             personal_memories = (
-                cls.query.filter(
-                    cls.user_id == user_id,
-                    cls.org_id.is_(None),
-                    cls.is_active == True,
-                )
+                personal_query
                 .order_by(cls.confidence.desc(), cls.last_reinforced.desc())
                 .limit(10)
                 .all()
             )
 
-        if not org_memories and not personal_memories:
+        if not org_memories and not personal_memories and not procedure_memories:
             return ""
+
+        # Render procedure memories as behavioral instructions (ABOVE everything else)
+        if procedure_memories:
+            lines.append("LEARNED BEHAVIORS (from previous conversations):")
+            lines.append("These are rules and preferences about HOW you should behave. Follow them.")
+            for m in procedure_memories:
+                lines.append(f"- {m.content}")
+            lines.append("")
 
         # Format organization section
         if org_memories:
@@ -567,6 +630,43 @@ class AgentMemory(db.Model):
             .all()
         )
 
+    @classmethod
+    def semantic_search(cls, query_text, user_id, org_id=None, limit=10):
+        """
+        Search memories by semantic meaning using pgvector cosine similarity.
+
+        Returns matching AgentMemory instances ordered by relevance (closest first).
+        Returns empty list if pgvector or embeddings are unavailable.
+        """
+        if not _PGVECTOR_AVAILABLE:
+            return []
+
+        from app.utils.embeddings import get_embedding, is_available
+        if not is_available():
+            return []
+
+        query_vec = get_embedding(query_text)
+        if query_vec is None:
+            return []
+
+        filters = [cls.is_active == True, cls.embedding.isnot(None)]
+        if user_id:
+            filters.append(cls.user_id == user_id)
+        if org_id:
+            filters.append(db.or_(cls.org_id == org_id, cls.org_id.is_(None)))
+
+        try:
+            return (
+                cls.query.filter(*filters)
+                .order_by(cls.embedding.cosine_distance(query_vec))
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            logger.warning(f"Semantic search failed, falling back: {e}")
+            db.session.rollback()
+            return []
+
     @staticmethod
     def save_memories_from_session(user_id=None, memories_list=None, org_id=None):
         """
@@ -623,6 +723,16 @@ class AgentMemory(db.Model):
                 existing.reinforce()
                 saved.append(existing)
             else:
+                # Enforce procedure cap: max 10 per user
+                mem_type = mem_data.get('type', 'fact')
+                if mem_type == 'procedure' and user_id:
+                    procedure_count = AgentMemory.query.filter_by(
+                        user_id=user_id, memory_type='procedure', is_active=True
+                    ).count()
+                    if procedure_count >= 10:
+                        logger.info(f"Procedure cap reached for user {user_id}, skipping: {content[:80]}")
+                        continue
+
                 # Calculate surprise score — how novel is this vs existing memories?
                 surprise = AgentMemory._calculate_surprise(content, user_id, org_id)
 
@@ -630,7 +740,9 @@ class AgentMemory(db.Model):
                 # Very surprising facts are high-signal, definitely worth keeping.
                 # Mundane/related facts get lower initial confidence.
                 base_confidence = mem_data.get('confidence', 0.8)
-                if surprise > 0.7:
+                if mem_type == 'procedure':
+                    adjusted_confidence = 1.0   # procedures are authoritative, protected from decay
+                elif surprise > 0.7:
                     adjusted_confidence = 0.95  # very surprising — definitely save
                 elif surprise >= 0.4:
                     adjusted_confidence = 0.85  # somewhat new
@@ -646,6 +758,17 @@ class AgentMemory(db.Model):
                     confidence=adjusted_confidence,
                     surprise_score=surprise,
                 )
+
+                # Generate semantic embedding (if pgvector + sentence-transformers available)
+                if _PGVECTOR_AVAILABLE:
+                    try:
+                        from app.utils.embeddings import get_embedding
+                        vec = get_embedding(content)
+                        if vec is not None:
+                            memory.embedding = vec
+                    except Exception:
+                        pass  # No embedding — pg_trgm still works
+
                 db.session.add(memory)
                 saved.append(memory)
 

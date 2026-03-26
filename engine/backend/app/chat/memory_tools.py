@@ -61,11 +61,14 @@ MEMORY_TOOL_DEFINITIONS = [
                 },
                 'type': {
                     'type': 'string',
-                    'enum': ['preference', 'fact', 'goal'],
+                    'enum': ['preference', 'fact', 'goal', 'procedure'],
                     'description': (
                         'preference = how the user likes things done. '
                         'fact = something true about the user (job, location, tools). '
-                        'goal = something the user is working toward.'
+                        'goal = something the user is working toward. '
+                        'procedure = a behavioral rule for HOW you should act '
+                        '(e.g., "always use Python", "never suggest dairy"). '
+                        'Max 10 procedures per user.'
                     ),
                 },
                 'category': {
@@ -108,7 +111,7 @@ MEMORY_TOOL_DEFINITIONS = [
                 },
                 'type': {
                     'type': 'string',
-                    'enum': ['preference', 'fact', 'goal'],
+                    'enum': ['preference', 'fact', 'goal', 'procedure'],
                     'description': 'Optional: filter results to a specific memory type.',
                 },
             },
@@ -153,7 +156,7 @@ def _execute_save_memory(params, user):
         content = content[:500]
 
     mem_type = params.get('type', 'fact')
-    if mem_type not in ('preference', 'fact', 'goal'):
+    if mem_type not in ('preference', 'fact', 'goal', 'procedure'):
         mem_type = 'fact'
 
     category = (params.get('category') or 'general').strip()[:50]
@@ -193,7 +196,17 @@ def _execute_save_memory(params, user):
 
 
 def _execute_search_memory(params, user):
-    """Search memories using pg_trgm similarity. Falls back to ILIKE if pg_trgm unavailable."""
+    """
+    Search memories using semantic similarity (pgvector) with pg_trgm and ILIKE fallbacks.
+
+    Search strategy (cascading):
+    1. Semantic search via pgvector cosine distance — finds meaning-level matches
+       ("physical activity" matches "went for a 5K run")
+    2. pg_trgm similarity — finds lexical fuzzy matches
+    3. ILIKE — basic substring match (last resort)
+
+    Results are merged and deduplicated by memory ID.
+    """
     query = (params.get('query') or '').strip()
     if not query:
         return 'No search query provided.'
@@ -202,37 +215,65 @@ def _execute_search_memory(params, user):
     limit = 10
 
     try:
-        # Try pg_trgm similarity search first (threshold 0.3 for search — looser than dedup's 0.6)
-        base_filters = [
-            AgentMemory.user_id == user.id,
-            AgentMemory.is_active == True,  # noqa: E712
-        ]
-        if mem_type_filter and mem_type_filter in ('preference', 'fact', 'goal'):
-            base_filters.append(AgentMemory.memory_type == mem_type_filter)
-
+        # --- Semantic search (pgvector) ---
+        semantic_results = []
         try:
-            results = (
-                AgentMemory.query
-                .filter(*base_filters)
-                .filter(sa_text("similarity(content, :query) > 0.3"))
-                .params(query=query)
-                .order_by(sa_text("similarity(content, :query) DESC"))
-                .params(query=query)
-                .limit(limit)
-                .all()
+            semantic_results = AgentMemory.semantic_search(
+                query_text=query,
+                user_id=user.id,
+                limit=limit,
             )
+            # Apply type filter if specified
+            if mem_type_filter and mem_type_filter in ('preference', 'fact', 'goal', 'procedure'):
+                semantic_results = [m for m in semantic_results if m.memory_type == mem_type_filter]
         except Exception:
-            # pg_trgm not available — fall back to ILIKE
-            db.session.rollback()
-            like_pattern = f'%{query}%'
-            results = (
-                AgentMemory.query
-                .filter(*base_filters)
-                .filter(AgentMemory.content.ilike(like_pattern))
-                .order_by(AgentMemory.confidence.desc(), AgentMemory.last_reinforced.desc())
-                .limit(limit)
-                .all()
-            )
+            pass  # Semantic search unavailable — continue to pg_trgm
+
+        # If semantic search found enough results, use them
+        if len(semantic_results) >= limit:
+            results = semantic_results[:limit]
+        else:
+            # --- pg_trgm fallback (fills gaps semantic search missed) ---
+            seen_ids = {m.id for m in semantic_results}
+
+            base_filters = [
+                AgentMemory.user_id == user.id,
+                AgentMemory.is_active == True,  # noqa: E712
+            ]
+            if mem_type_filter and mem_type_filter in ('preference', 'fact', 'goal', 'procedure'):
+                base_filters.append(AgentMemory.memory_type == mem_type_filter)
+
+            trgm_results = []
+            try:
+                trgm_results = (
+                    AgentMemory.query
+                    .filter(*base_filters)
+                    .filter(sa_text("similarity(content, :query) > 0.3"))
+                    .params(query=query)
+                    .order_by(sa_text("similarity(content, :query) DESC"))
+                    .params(query=query)
+                    .limit(limit)
+                    .all()
+                )
+            except Exception:
+                # pg_trgm not available — fall back to ILIKE
+                db.session.rollback()
+                like_pattern = f'%{query}%'
+                trgm_results = (
+                    AgentMemory.query
+                    .filter(*base_filters)
+                    .filter(AgentMemory.content.ilike(like_pattern))
+                    .order_by(AgentMemory.confidence.desc(), AgentMemory.last_reinforced.desc())
+                    .limit(limit)
+                    .all()
+                )
+
+            # Merge: semantic first (higher quality), then trgm/ilike for anything new
+            results = list(semantic_results)
+            for m in trgm_results:
+                if m.id not in seen_ids and len(results) < limit:
+                    results.append(m)
+                    seen_ids.add(m.id)
 
         if not results:
             type_clause = f' (type: {mem_type_filter})' if mem_type_filter else ''
